@@ -1,4 +1,0 @@
-method,url,status_code,body_length,final_url,error,path_payload,header_payload,method_payload,interesting,confidence,score,reasons
-GET,https://benchmark-dev-eu.beta.contentsquare.com/,403,42,https://benchmark-dev-eu.beta.contentsquare.com/,,,,,False,none,15,deviates_from_calibration_status
-GET,https://benchmark-dev-eu.beta.contentsquare.com/,403,42,https://benchmark-dev-eu.beta.contentsquare.com/,,,,,False,none,15,deviates_from_calibration_status
-GET,https://benchmark-dev-eu.beta.contentsquare.com/,403,42,https://benchmark-dev-eu.beta.contentsquare.com/,,,,,False,none,15,deviates_from_calibration_status
