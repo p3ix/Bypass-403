@@ -1,4 +1,4 @@
-from bypass.cli import _summarize_rows
+from bypass.cli import _rank_interesting_rows, _summarize_rows
 from bypass.models import AnalysisResult, RequestSpec, TryResult
 
 
@@ -22,3 +22,20 @@ def test_summarize_rows_groups_status_and_lengths() -> None:
     assert grouped[403]["different_values"] == [120]
     assert grouped[200]["normal_bytes"] == 900
     assert grouped[-1]["normal_bytes"] == 0
+
+
+def test_rank_interesting_rows_prioritizes_status_and_delta() -> None:
+    b_status = 403
+    b_len = 100
+    r1 = _row(403, 140)
+    r1[1].score = 40
+    r2 = _row(200, 110)
+    r2[1].score = 40
+    ranked = _rank_interesting_rows(
+        b_status,
+        b_len,
+        [r1, r2],
+        top_limit=5,
+        top_min_score=0,
+    )
+    assert ranked[0][0].status_code == 200

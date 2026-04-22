@@ -18,6 +18,8 @@ def test_probe_help_contains_profiles() -> None:
     assert "all" in result.stdout
     assert "--host-fuzz" in result.stdout
     assert "--smuggling-lite" in result.stdout
+    assert "--top-limit" in result.stdout
+    assert "--top-min-score" in result.stdout
 
 
 def test_replay_help_contains_advanced_flags() -> None:

@@ -96,6 +96,88 @@ def _print_summary_table(rows: list[tuple[TryResult, AnalysisResult]]) -> None:
     console.print(table)
 
 
+def _payload_label(r: TryResult) -> str:
+    labels = [
+        r.spec.path_payload.label if r.spec.path_payload else "—",
+        r.spec.header_payload.label if r.spec.header_payload else "—",
+        r.spec.method_payload.label if r.spec.method_payload else "—",
+        r.spec.query_payload.label if r.spec.query_payload else "—",
+        r.spec.protocol_payload.label if r.spec.protocol_payload else "—",
+        r.spec.host_payload.label if r.spec.host_payload else "—",
+        r.spec.smuggling_payload.label if r.spec.smuggling_payload else "—",
+    ]
+    return " + ".join(x for x in labels if x != "—") or "—"
+
+
+def _status_priority(baseline_status: int, status_code: int) -> int:
+    if status_code < 0:
+        return 0
+    if status_code in (200, 201, 202, 204):
+        return 120
+    if 300 <= status_code < 400:
+        return 90
+    if baseline_status != status_code:
+        return 60
+    return 0
+
+
+def _rank_interesting_rows(
+    baseline_status: int,
+    baseline_len: int,
+    rows: list[tuple[TryResult, AnalysisResult]],
+    *,
+    top_limit: int,
+    top_min_score: int,
+) -> list[tuple[TryResult, AnalysisResult, int, int]]:
+    ranked: list[tuple[TryResult, AnalysisResult, int, int]] = []
+    for r, a in rows:
+        if r.error:
+            continue
+        if a.score < top_min_score:
+            continue
+        delta = abs(r.body_length - baseline_len)
+        rank = a.score + _status_priority(baseline_status, r.status_code) + min(delta // 10, 60)
+        ranked.append((r, a, delta, rank))
+    ranked.sort(key=lambda x: (x[3], x[1].score, x[2]), reverse=True)
+    return ranked[: max(0, top_limit)]
+
+
+def _print_top_interesting_section(
+    baseline_status: int,
+    baseline_len: int,
+    rows: list[tuple[TryResult, AnalysisResult]],
+    *,
+    top_limit: int,
+    top_min_score: int,
+) -> None:
+    top = _rank_interesting_rows(
+        baseline_status,
+        baseline_len,
+        rows,
+        top_limit=top_limit,
+        top_min_score=top_min_score,
+    )
+    if not top:
+        return
+    table = Table(title="Top bypasses interesantes", show_lines=False)
+    table.add_column("Rank", justify="right")
+    table.add_column("Status", justify="right")
+    table.add_column("Bytes", justify="right")
+    table.add_column("Delta", justify="right")
+    table.add_column("Payload", max_width=42)
+    table.add_column("Conf/Score", justify="right")
+    for r, a, delta, rank in top:
+        table.add_row(
+            str(rank),
+            f"{baseline_status}->{r.status_code}",
+            f"{baseline_len}->{r.body_length}",
+            str(delta),
+            _payload_label(r),
+            f"{a.confidence}/{a.score}",
+        )
+    console.print(table)
+
+
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"bypass-tool {__version__}")
@@ -184,6 +266,14 @@ def probe(
         int,
         typer.Option("--smuggling-limit", help="Maximo de probes smuggling por target"),
     ] = 20,
+    top_limit: Annotated[
+        int,
+        typer.Option("--top-limit", help="Maximo de hallazgos en Top bypasses"),
+    ] = 10,
+    top_min_score: Annotated[
+        int,
+        typer.Option("--top-min-score", help="Score minimo para entrar al Top"),
+    ] = 35,
 ) -> None:
     """Envía el catálogo de bypass sobre la URL indicada (solo en alcances que te autorice el propietario)."""
     filter_interesting = not all_results
@@ -261,16 +351,7 @@ def probe(
     shown = 0
     visible_rows = [(r, a) for r, a in results if (a.interesting or not filter_interesting)]
     for r, analysis in visible_rows:
-        p_lbl = r.spec.path_payload.label if r.spec.path_payload else "—"
-        h_lbl = r.spec.header_payload.label if r.spec.header_payload else "—"
-        m_lbl = r.spec.method_payload.label if r.spec.method_payload else "—"
-        q_lbl = r.spec.query_payload.label if r.spec.query_payload else "—"
-        proto_lbl = r.spec.protocol_payload.label if r.spec.protocol_payload else "—"
-        host_lbl = r.spec.host_payload.label if r.spec.host_payload else "—"
-        smuggle_lbl = r.spec.smuggling_payload.label if r.spec.smuggling_payload else "—"
-        payload_label = " + ".join(
-            x for x in (p_lbl, h_lbl, m_lbl, q_lbl, proto_lbl, host_lbl, smuggle_lbl) if x != "—"
-        ) or "—"
+        payload_label = _payload_label(r)
         if r.error:
             code = f"err ({r.error[:20]}…)" if len(r.error) > 20 else f"err ({r.error})"
         else:
@@ -308,6 +389,13 @@ def probe(
         export_csv(output_csv, visible_rows)
         console.print(f"[green]CSV exportado en[/] {output_csv}")
     _print_summary_table(visible_rows)
+    _print_top_interesting_section(
+        base.status_code,
+        base.body_length,
+        visible_rows,
+        top_limit=top_limit,
+        top_min_score=top_min_score,
+    )
     smuggle_hits = sum(1 for _, a in visible_rows if "smuggling_suspected" in a.reasons)
     host_hits = sum(1 for r, _ in visible_rows if r.spec.host_payload is not None)
     if host_hits or smuggle_hits:
