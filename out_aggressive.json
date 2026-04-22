@@ -1,0 +1,1456 @@
+{
+  "target_url": "https://metabase.contentsquare.com/",
+  "baseline": {
+    "status_code": 403,
+    "body_length": 111,
+    "body_sample": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>",
+    "calibration": {
+      "enabled": true,
+      "samples_ok": 3,
+      "dominant_status": 403,
+      "avg_length": 111,
+      "length_delta": 40
+    }
+  },
+  "results": [
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-For": "127.0.0.1, 127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-For: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Real-IP": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Real-IP: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Originating-IP": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Originating-IP: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "True-Client-IP": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "True-Client-IP: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "Client-IP": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "Client-IP: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Client-IP": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Client-IP: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "CF-Connecting-IP": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "CF-Connecting-IP: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Custom-IP-Authorization": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Custom-IP-Authorization: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Custom-IP-Authorization": "MTI3LjAuMC4xCg=="
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Custom-IP-Authorization: base64 127.0.0.1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "Forwarded": "for=192.0.2.1;by=192.0.2.1;host=metabase.contentsquare.com;proto=https"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "Forwarded: for=",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "Forwarded-For": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "Forwarded-For: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Remote-IP": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Remote-IP: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Remote-Addr": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Remote-Addr: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-ProxyUser-Ip": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-ProxyUser-Ip: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "Cluster-Client-IP": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "Cluster-Client-IP: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-Host": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-Host: loopback",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Host": "metabase.contentsquare.com"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Host: origen",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "Host": "localhost"
+      },
+      "status_code": 403,
+      "body_length": 915,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "Host: localhost",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": true,
+        "confidence": "medium",
+        "score": 55,
+        "reasons": [
+          "length_changed",
+          "body_sample_changed"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-Server": "localhost"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-Server: self",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Original-URL": "/"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Original-URL: path (proxy)",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Original-URL": "/"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Original-URL: path with request /",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Original-URL": "/"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Original-URL: / (alt)",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Rewrite-URL": "/"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Rewrite-URL: path",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Rewrite-URL": "/"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Rewrite-URL: path with request /",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Override-URL": "/"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Override-URL: path",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "Referer": "https://metabase.contentsquare.com/"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "Referer: same host",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-Proto": "https"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-Proto: https",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-Proto": "http"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-Proto: http",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-Port": "443"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-Port: 443",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-Port": "80"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-Port: 80",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Port": "443"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Port: 443",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Port": "80"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Port: 80",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "Origin": "https://metabase.contentsquare.com"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "Origin: same host",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "User-Agent": "Googlebot/2.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "User-Agent: Googlebot",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-AppEngine-Trusted-IP-Request": "1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-AppEngine-Trusted-IP-Request: 1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-Scheme": "https"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-Scheme: https",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Original-Method": "GET"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Original-Method: GET",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "x-middleware-subrequest": "middleware"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "x-middleware-subrequest",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "Destination": "https://metabase.contentsquare.com/"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "Destination: same path",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-For": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-For: 127.0.0.1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-For": "127.0.0.1, 127.0.0.1, 127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-For chained: 127.0.0.1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Real-IP": "127.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Real-IP: 127.0.0.1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-For": "::1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-For: ::1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-For": "::1, ::1, ::1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-For chained: ::1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Real-IP": "::1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Real-IP: ::1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-For": "10.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-For: 10.0.0.1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-For": "10.0.0.1, 10.0.0.1, 10.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-For chained: 10.0.0.1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Real-IP": "10.0.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Real-IP: 10.0.0.1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-For": "192.168.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-For: 192.168.0.1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Forwarded-For": "192.168.0.1, 192.168.0.1, 192.168.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Forwarded-For chained: 192.168.0.1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {
+        "X-Real-IP": "192.168.0.1"
+      },
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": "Ruta original (baseline)",
+        "header": "X-Real-IP: 192.168.0.1",
+        "method": null,
+        "query": null
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/",
+      "headers": {},
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/",
+      "error": null,
+      "payloads": {
+        "path": null,
+        "header": null,
+        "method": null,
+        "query": "Query original"
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/?debug=1",
+      "headers": {},
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/?debug=1",
+      "error": null,
+      "payloads": {
+        "path": null,
+        "header": null,
+        "method": null,
+        "query": "Parametro debug=1"
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/?admin=true",
+      "headers": {},
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/?admin=true",
+      "error": null,
+      "payloads": {
+        "path": null,
+        "header": null,
+        "method": null,
+        "query": "Parametro admin=true"
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/?role=admin",
+      "headers": {},
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/?role=admin",
+      "error": null,
+      "payloads": {
+        "path": null,
+        "header": null,
+        "method": null,
+        "query": "Parametro role=admin"
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/?role=user&role=admin",
+      "headers": {},
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/?role=user&role=admin",
+      "error": null,
+      "payloads": {
+        "path": null,
+        "header": null,
+        "method": null,
+        "query": "Parameter pollution role=user&role=admin"
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://metabase.contentsquare.com/?id=1&id=2",
+      "headers": {},
+      "status_code": 403,
+      "body_length": 111,
+      "final_url": "https://metabase.contentsquare.com/?id=1&id=2",
+      "error": null,
+      "payloads": {
+        "path": null,
+        "header": null,
+        "method": null,
+        "query": "Parameter pollution id duplicado"
+      },
+      "analysis": {
+        "interesting": false,
+        "confidence": "none",
+        "score": 0,
+        "reasons": [
+          "soft_403_marker"
+        ]
+      }
+    }
+  ]
+}
