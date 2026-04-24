@@ -47,6 +47,8 @@ class RequestSpec:
     smuggling_payload: Payload | None = None
     protocol_hint: str | None = None
     body: bytes | None = None
+    family: str | None = None
+    target_type: str = "path"
 
 
 @dataclass
@@ -56,6 +58,7 @@ class TryResult:
     body_length: int
     final_url: str
     error: str | None = None
+    response_headers: dict[str, str] = field(default_factory=dict)
 
     @property
     def ok_response(self) -> bool:
@@ -69,6 +72,7 @@ class BaselineSnapshot:
     body_sample: str = ""
     server_header: str = ""
     calibration: dict[str, Any] = field(default_factory=dict)
+    response_headers: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

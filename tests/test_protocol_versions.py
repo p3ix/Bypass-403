@@ -18,7 +18,7 @@ def test_protocol_mode_generates_http10_http11_http2() -> None:
 
 
 def test_fetch_http10_rejects_invalid_url() -> None:
-    st, ln, _, _, err = _fetch_http10("GET", "not-a-url", {}, timeout=1.0, verify=True)
+    st, ln, _, _, _, err = _fetch_http10("GET", "not-a-url", {}, timeout=1.0, verify=True)
     assert st == -1
     assert ln == 0
     assert err is not None

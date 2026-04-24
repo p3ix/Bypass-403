@@ -41,3 +41,23 @@ def test_analyzer_penalizes_soft403_marker_without_hard_changes() -> None:
     analysis = analyze_result(baseline, result, body_sample="access denied by waf")
     assert analysis.interesting is False
     assert analysis.score == 0
+
+
+def test_analyzer_detects_www_authenticate_shift() -> None:
+    baseline = BaselineSnapshot(
+        status_code=403,
+        body_length=100,
+        body_sample="forbidden",
+        response_headers={"www-authenticate": ""},
+    )
+    result = TryResult(
+        spec=RequestSpec(method="GET", url="https://example.com", headers={}),
+        status_code=401,
+        body_length=100,
+        final_url="https://example.com",
+        response_headers={"www-authenticate": 'Basic realm="admin"'},
+    )
+    analysis = analyze_result(baseline, result, body_sample="auth required")
+    assert analysis.interesting is True
+    assert "www_authenticate_changed" in analysis.reasons
+    assert "auth_challenge_detected" in analysis.reasons

@@ -27,3 +27,15 @@ def test_replay_help_contains_advanced_flags() -> None:
     assert result.exit_code == 0
     assert "--min-confidence" in result.stdout
     assert "--replay-methods" in result.stdout
+
+
+def test_domain_probe_help_contains_domain_flags() -> None:
+    result = runner.invoke(app, ["domain-probe", "--help"])
+    assert result.exit_code == 0
+    assert "auth-challenges" in result.stdout
+
+
+def test_domain_batch_help_works() -> None:
+    result = runner.invoke(app, ["domain-batch", "--help"])
+    assert result.exit_code == 0
+    assert "--out-dir" in result.stdout

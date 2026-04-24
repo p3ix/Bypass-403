@@ -19,6 +19,7 @@ from bypass.engine import run_probe
 from bypass.models import AnalysisResult, TryResult
 from bypass.payloads.headers_403 import default_header_sets
 from bypass.payloads.host_sni_403 import host_sni_payloads
+from bypass.payloads.auth_401 import auth_challenge_payloads
 from bypass.payloads.methods_403 import method_payloads
 from bypass.payloads.paths_403 import path_mutations
 from bypass.payloads.protocols_403 import protocol_payloads
@@ -110,6 +111,17 @@ def _payload_label(r: TryResult) -> str:
         r.spec.smuggling_payload.label if r.spec.smuggling_payload else "—",
     ]
     return " + ".join(x for x in labels if x != "—") or "—"
+
+
+def _normalize_domain_target(raw: str) -> str:
+    v = raw.strip()
+    if not v:
+        return v
+    if "://" not in v:
+        v = f"https://{v}"
+    u = urlsplit(v)
+    path = u.path or "/"
+    return f"{u.scheme}://{u.netloc}{path}"
 
 
 def _http_code_style(code: int) -> str:
@@ -300,7 +312,8 @@ def _print_top_interesting_section(
     insecure: bool,
     follow_redirects: bool,
     timeout: float,
-    baseline_headers: dict[str, str] | None = None,
+    baseline_request_headers: dict[str, str] | None = None,
+    baseline_response_headers: dict[str, str] | None = None,
 ) -> None:
     top = _rank_interesting_rows(
         baseline_status,
@@ -323,6 +336,7 @@ def _print_top_interesting_section(
     table.add_column("Status", justify="right")
     table.add_column("Bytes", justify="right")
     table.add_column("Delta", justify="right")
+    table.add_column("Family", max_width=14)
     table.add_column("Payload", max_width=42, overflow="ellipsis")
     table.add_column("Conf/Score", justify="right")
     for idx, (r, a, delta, comp_rank) in enumerate(top):
@@ -332,6 +346,7 @@ def _print_top_interesting_section(
             _text_pair_status(baseline_status, r.status_code),
             _text_pair_bytes(baseline_len, r.body_length),
             Text(str(delta), style=_delta_style(delta)),
+            Text(r.spec.family or "general", style="cyan"),
             Text(_payload_label(r), style="white"),
             _text_conf_score(a),
         )
@@ -355,8 +370,12 @@ def _print_top_interesting_section(
         if smug:
             console.print("  [dim]Nota: smuggling-lite; curl puede no coincidir byte a byte con el raw enviado.[/]")
         console.print(f"[dim]URL exacta:[/] {r.spec.url}")
-        hd = _header_diff_text(r.spec.headers, baseline_headers, limit=4)
+        hd = _header_diff_text(r.spec.headers, baseline_request_headers, limit=4)
         console.print(f"[dim]Headers diff:[/] {hd}")
+        base_wa = (baseline_response_headers or {}).get("www-authenticate", "")
+        cur_wa = r.response_headers.get("www-authenticate", "")
+        if base_wa or cur_wa:
+            console.print(f"[dim]WWW-Authenticate:[/] base='{base_wa or '-'}' -> actual='{cur_wa or '-'}'")
         console.print(Text(cmd, style="green"), soft_wrap=True)
         if idx < len(top) - 1:
             console.print()
@@ -582,7 +601,8 @@ def probe(
         insecure=insecure,
         follow_redirects=follow,
         timeout=timeout,
-        baseline_headers={},
+        baseline_request_headers={},
+        baseline_response_headers=base.response_headers,
     )
     smuggle_hits = sum(1 for _, a in visible_rows if "smuggling_suspected" in a.reasons)
     host_hits = sum(1 for r, _ in visible_rows if r.spec.host_payload is not None)
@@ -595,6 +615,142 @@ def probe(
         f"profile={profile} · "
         f"DevSec: solo usos legales y con permiso.[/]"
     )
+
+
+@app.command("domain-probe")
+def domain_probe(
+    target: Annotated[str, typer.Argument(help="Dominio o URL base, p.ej. admin.example.com o https://admin.example.com")],
+    profile: Annotated[Literal["safe", "aggressive"], typer.Option("--profile")] = "aggressive",
+    timeout: Annotated[float, typer.Option(help="Timeout por petición (s)")] = 15.0,
+    insecure: Annotated[bool, typer.Option("-k", help="No verificar certificado TLS")] = False,
+    follow: Annotated[bool, typer.Option("-L", help="Seguir redirecciones")] = False,
+    method: Annotated[list[str] | None, typer.Option("--method")] = None,
+    host_fuzz_value: Annotated[list[str] | None, typer.Option("--host-fuzz-value")] = None,
+    max_vhost_payloads: Annotated[int, typer.Option("--max-vhost-payloads")] = 30,
+    auth_challenges: Annotated[bool, typer.Option("--auth-challenges/--no-auth-challenges")] = True,
+    all_results: Annotated[bool, typer.Option("--all")] = False,
+    top_limit: Annotated[int, typer.Option("--top-limit")] = 10,
+    top_min_score: Annotated[int, typer.Option("--top-min-score")] = 35,
+    output_json: Annotated[str | None, typer.Option("--json")] = None,
+    output_csv: Annotated[str | None, typer.Option("--csv")] = None,
+) -> None:
+    url = _normalize_domain_target(target)
+    methods = method if method else ["GET"]
+    base, results = run_probe(
+        url,
+        mode="all",
+        combine=True,
+        profile_name=profile,
+        methods=methods,
+        timeout=timeout,
+        verify=not insecure,
+        follow_redirects=follow,
+        enable_host_fuzz=True,
+        host_fuzz_values=host_fuzz_value or [],
+        enable_smuggling_lite=True,
+        smuggling_limit=20 if profile == "safe" else 40,
+        guided_combos=True,
+        domain_mode=True,
+        auth_challenges=auth_challenges,
+        max_vhost_payloads=max(1, max_vhost_payloads),
+    )
+    visible_rows = [(r, a) for r, a in results if (a.interesting or all_results)]
+    console.print(f"[bold]Domain baseline[/] {url} -> {base.status_code} [dim]({base.body_length} B)[/]")
+    table = Table(title="Domain/Subdomain resultados", show_lines=False)
+    table.add_column("Metodo", style="cyan", no_wrap=True)
+    table.add_column("Codigo", justify="right")
+    table.add_column("Bytes", justify="right")
+    table.add_column("Family")
+    table.add_column("Payload", max_width=40)
+    table.add_column("WWW-Auth", max_width=28)
+    table.add_column("URL", max_width=56)
+    for r, a in visible_rows:
+        code = "err" if r.error else str(r.status_code)
+        table.add_row(
+            r.spec.method,
+            code,
+            str(r.body_length),
+            r.spec.family or "general",
+            f"{_payload_label(r)} [{a.confidence}:{a.score}]",
+            r.response_headers.get("www-authenticate", "—") or "—",
+            r.final_url,
+        )
+    console.print(table)
+    _print_summary_table(visible_rows)
+    _print_top_interesting_section(
+        base.status_code,
+        base.body_length,
+        visible_rows,
+        top_limit=top_limit,
+        top_min_score=top_min_score,
+        insecure=insecure,
+        follow_redirects=follow,
+        timeout=timeout,
+        baseline_request_headers={},
+        baseline_response_headers=base.response_headers,
+    )
+    if output_json:
+        export_json(output_json, url, base, visible_rows)
+        console.print(f"[green]JSON exportado en[/] {output_json}")
+    if output_csv:
+        export_csv(output_csv, visible_rows)
+        console.print(f"[green]CSV exportado en[/] {output_csv}")
+    console.print(
+        f"[dim]Domain intents: {len(results)} · Mostrados: {len(visible_rows)} · auth_challenges={auth_challenges}[/]"
+    )
+
+
+@app.command("domain-batch")
+def domain_batch(
+    input_file: Annotated[str, typer.Argument(help="Archivo con dominios/URLs (una por línea)")],
+    profile: Annotated[Literal["safe", "aggressive"], typer.Option("--profile")] = "aggressive",
+    timeout: Annotated[float, typer.Option(help="Timeout por petición (s)")] = 15.0,
+    insecure: Annotated[bool, typer.Option("-k")] = False,
+    follow: Annotated[bool, typer.Option("-L")] = False,
+    auth_challenges: Annotated[bool, typer.Option("--auth-challenges/--no-auth-challenges")] = True,
+    out_dir: Annotated[str, typer.Option("--out-dir")] = "out-domain",
+    all_results: Annotated[bool, typer.Option("--all")] = False,
+) -> None:
+    rows = [line.strip() for line in Path(input_file).read_text(encoding="utf-8").splitlines() if line.strip()]
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    summary: list[dict[str, object]] = []
+    for idx, raw in enumerate(rows, start=1):
+        url = _normalize_domain_target(raw)
+        base, results = run_probe(
+            url,
+            mode="all",
+            combine=True,
+            profile_name=profile,
+            timeout=timeout,
+            verify=not insecure,
+            follow_redirects=follow,
+            enable_host_fuzz=True,
+            enable_smuggling_lite=True,
+            guided_combos=True,
+            domain_mode=True,
+            auth_challenges=auth_challenges,
+        )
+        visible_rows = [(r, a) for r, a in results if (a.interesting or all_results)]
+        stem = f"domain_{idx:03d}"
+        json_path = str(Path(out_dir) / f"{stem}.json")
+        csv_path = str(Path(out_dir) / f"{stem}.csv")
+        export_json(json_path, url, base, visible_rows)
+        export_csv(csv_path, visible_rows)
+        summary.append(
+            {
+                "target": url,
+                "baseline_status": base.status_code,
+                "www_authenticate": base.response_headers.get("www-authenticate", ""),
+                "total_requests": len(results),
+                "interesting_rows": len(visible_rows),
+                "json": json_path,
+                "csv": csv_path,
+            }
+        )
+        console.print(f"[cyan]{idx}/{len(rows)}[/] {url} -> {len(visible_rows)} resultados")
+    summary_path = Path(out_dir) / "summary.json"
+    summary_path.write_text(json.dumps(summary, ensure_ascii=True, indent=2), encoding="utf-8")
+    console.print(f"[green]Resumen domain batch:[/] {summary_path}")
 
 
 @app.command("batch")
@@ -765,6 +921,7 @@ def list_payloads() -> None:
     u = "https://example.com/ejemplo/ruta"
     host = urlsplit(u).netloc
     hostset = host_sni_payloads(canonical_host=host, custom_hosts=None)
+    authset = auth_challenge_payloads()
     smuggle = smuggling_lite_payloads()
     h = default_header_sets("/ejemplo/ruta", host, "https")
     console.print(
@@ -774,6 +931,7 @@ def list_payloads() -> None:
         f"  · Estrategias de métodos: {len(m)}\n"
         f"  · Estrategias de protocolo: {len(proto)}\n"
         f"  · Estrategias Host/SNI: {len(hostset)}\n"
+        f"  · Probes auth 401: {len(authset)}\n"
         f"  · Probes smuggling-lite: {len(smuggle)}"
     )
 

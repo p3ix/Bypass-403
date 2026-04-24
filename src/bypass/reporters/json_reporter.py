@@ -19,6 +19,7 @@ def export_json(
             "body_length": baseline.body_length,
             "body_sample": baseline.body_sample,
             "calibration": baseline.calibration,
+            "response_headers": baseline.response_headers,
         },
         "results": [
             {
@@ -29,6 +30,10 @@ def export_json(
                 "body_length": r.body_length,
                 "final_url": r.final_url,
                 "error": r.error,
+                "target_type": r.spec.target_type,
+                "family": r.spec.family,
+                "response_headers": dict(r.response_headers),
+                "www_authenticate": r.response_headers.get("www-authenticate"),
                 "payloads": {
                     "path": r.spec.path_payload.label if r.spec.path_payload else None,
                     "header": r.spec.header_payload.label if r.spec.header_payload else None,

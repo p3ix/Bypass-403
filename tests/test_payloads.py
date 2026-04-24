@@ -1,4 +1,5 @@
 from bypass.payloads.host_sni_403 import host_sni_payloads
+from bypass.payloads.auth_401 import auth_challenge_payloads
 from bypass.payloads.headers_403 import default_header_sets
 from bypass.payloads.methods_403 import method_payloads
 from bypass.payloads.paths_403 import path_mutations
@@ -51,3 +52,8 @@ def test_host_sni_payloads_generated() -> None:
 def test_smuggling_payloads_generated() -> None:
     rows = smuggling_lite_payloads()
     assert len(rows) >= 4
+
+
+def test_auth_401_payloads_generated() -> None:
+    rows = auth_challenge_payloads()
+    assert len(rows) >= 5

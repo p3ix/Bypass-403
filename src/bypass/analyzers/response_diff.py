@@ -16,6 +16,7 @@ class AnalyzerConfig:
         "not authorized",
         "waf",
     )
+    auth_schemes: tuple[str, ...] = ("basic", "bearer", "digest", "ntlm", "negotiate")
 
 
 def analyze_result(
@@ -34,6 +35,15 @@ def analyze_result(
     if result.status_code != baseline.status_code:
         reasons.append("status_changed")
         score += 45
+        if result.status_code in {200, 201, 202, 204} and baseline.status_code in {401, 403}:
+            reasons.append("status_improved_to_2xx")
+            score += 35
+        elif 300 <= result.status_code < 400 and baseline.status_code in {401, 403}:
+            reasons.append("status_improved_to_3xx")
+            score += 25
+        elif baseline.status_code == 403 and result.status_code == 401:
+            reasons.append("reached_auth_layer")
+            score += 20
     if abs(result.body_length - baseline.body_length) >= cfg.length_delta:
         reasons.append("length_changed")
         score += 25
@@ -52,6 +62,17 @@ def analyze_result(
     if isinstance(dom_status, int) and result.status_code != dom_status:
         reasons.append("deviates_from_calibration_status")
         score += 15
+
+    baseline_wa = (baseline.response_headers.get("www-authenticate", "") or "").lower()
+    current_wa = (result.response_headers.get("www-authenticate", "") or "").lower()
+    if current_wa and current_wa != baseline_wa:
+        reasons.append("www_authenticate_changed")
+        score += 20
+    if current_wa:
+        seen = [scheme for scheme in cfg.auth_schemes if scheme in current_wa]
+        if seen:
+            reasons.append("auth_challenge_detected")
+            score += 10
 
     # Si sigue en el mismo status y aparece firma de bloqueo, evitar sobrevalorar diffs de body.
     if (
