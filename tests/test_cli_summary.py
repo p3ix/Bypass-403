@@ -1,4 +1,4 @@
-from bypass.cli import _rank_interesting_rows, _summarize_rows
+from bypass.cli import _rank_interesting_rows, _summarize_rows, tryresult_to_curl
 from bypass.models import AnalysisResult, RequestSpec, TryResult
 
 
@@ -39,3 +39,47 @@ def test_rank_interesting_rows_prioritizes_status_and_delta() -> None:
         top_min_score=0,
     )
     assert ranked[0][0].status_code == 200
+
+
+def test_tryresult_to_curl_includes_url_and_header() -> None:
+    spec = RequestSpec(
+        method="GET",
+        url="https://example.com/admin%2f",
+        headers={"X-Test": "1"},
+    )
+    r = TryResult(spec=spec, status_code=200, body_length=10, final_url=spec.url)
+    line = tryresult_to_curl(r, insecure=True, follow_redirects=True, max_time=5.0)
+    assert "curl" in line
+    assert "-k" in line
+    assert "-L" in line
+    assert "--max-time" in line
+    assert "5" in line
+    assert "X-Test" in line
+    assert "example.com" in line
+
+
+def test_tryresult_to_curl_body_uses_base64_pipe() -> None:
+    spec = RequestSpec(
+        method="POST",
+        url="https://example.com/x",
+        headers={"C": "3", "A": "1"},
+        body=b"ab",
+    )
+    r = TryResult(spec=spec, status_code=200, body_length=2, final_url=spec.url)
+    line = tryresult_to_curl(r)
+    assert "printf" in line
+    assert "base64" in line
+    assert "--data-binary" in line
+    assert "ab" not in line  # cuerpo va en base64, no en claro
+
+
+def test_tryresult_to_curl_http1_0_hint() -> None:
+    spec = RequestSpec(
+        method="GET",
+        url="https://example.com/",
+        headers={},
+        protocol_hint="http1_0",
+    )
+    r = TryResult(spec=spec, status_code=200, body_length=0, final_url=spec.url)
+    line = tryresult_to_curl(r)
+    assert "--http1.0" in line

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import json
+import shlex
 from collections import Counter
 from pathlib import Path
 from typing import Annotated, Literal
@@ -10,6 +12,7 @@ import typer
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
+from rich.text import Text
 
 from bypass import __version__
 from bypass.engine import run_probe
@@ -109,6 +112,125 @@ def _payload_label(r: TryResult) -> str:
     return " + ".join(x for x in labels if x != "—") or "—"
 
 
+def _http_code_style(code: int) -> str:
+    if code < 0:
+        return "red"
+    if 200 <= code < 300:
+        return "bold green"
+    if 300 <= code < 400:
+        return "bold cyan"
+    if 400 <= code < 500:
+        return "bold yellow"
+    if 500 <= code < 600:
+        return "bold red"
+    return "white"
+
+
+def _confidence_badge_style(conf: str) -> str:
+    if conf == "high":
+        return "bold green"
+    if conf == "medium":
+        return "bold yellow"
+    if conf == "low":
+        return "cyan"
+    return "dim"
+
+
+def _top_index_style(i: int) -> str:
+    if i == 0:
+        return "bold #FFD700"
+    if i == 1:
+        return "bold #C0C0C0"
+    if i == 2:
+        return "bold #CD7F32"
+    return "bold white"
+
+
+def _delta_style(delta: int) -> str:
+    if delta >= 5000:
+        return "bold red"
+    if delta >= 500:
+        return "bold yellow"
+    if delta >= 50:
+        return "white"
+    return "dim"
+
+
+def tryresult_to_curl(
+    r: TryResult,
+    *,
+    insecure: bool = False,
+    follow_redirects: bool = False,
+    max_time: float = 0.0,
+) -> str:
+    """
+    Línea de shell lista para copiar: reproduce método, URL, cabeceras y cuerpo (vía base64) lo más fiel
+    posible a `RequestSpec` (p. ej. -k/-L y --http1.0/--http2 alineados con el probe).
+    Probes de smuggling crudos pueden requerir herramientas de bajo nivel; aquí se refleja lo que curl puede enviar.
+    """
+    s = r.spec
+    curl_args: list[str] = ["curl", "-sS"]
+    if insecure:
+        curl_args.append("-k")
+    if follow_redirects:
+        curl_args.append("-L")
+    if max_time > 0:
+        mt = int(max_time) if max_time == int(max_time) else max_time
+        curl_args.extend(["--max-time", str(mt)])
+
+    if s.protocol_hint == "http1_0":
+        curl_args.append("--http1.0")
+    elif s.protocol_hint == "http2":
+        curl_args.append("--http2")
+
+    m = s.method.upper()
+    if s.body or m not in ("GET", "HEAD"):
+        curl_args.extend(["-X", m])
+    elif m == "HEAD":
+        curl_args.extend(["-X", "HEAD"])
+
+    for key in sorted(s.headers, key=str.lower):
+        val = s.headers[key]
+        curl_args.extend(["-H", shlex.quote(f"{key}: {val}")])
+
+    if s.body:
+        b64 = base64.b64encode(s.body).decode("ascii")
+        body_curl = list(curl_args)
+        body_curl.extend(["--data-binary", "@-"])
+        body_curl.append(shlex.quote(s.url))
+        return f"printf '%s' {shlex.quote(b64)} | base64 -d | {shlex.join(body_curl)}"
+
+    curl_args.append(shlex.quote(s.url))
+    return shlex.join(curl_args)
+
+
+def _text_pair_status(b: int, c: int) -> Text:
+    t = Text()
+    t.append(f"{b}", style="dim")
+    t.append("→", style="white")
+    t.append(f"{c}", style=_http_code_style(c))
+    return t
+
+
+def _text_pair_bytes(baseline_len: int, cur_len: int) -> Text:
+    t = Text()
+    t.append(f"{baseline_len}", style="dim")
+    t.append("→", style="white")
+    t.append(
+        f"{cur_len}",
+        style="bold yellow" if cur_len != baseline_len else "white",
+    )
+    return t
+
+
+def _text_conf_score(a: AnalysisResult) -> Text:
+    t = Text()
+    t.append(a.confidence, style=_confidence_badge_style(a.confidence))
+    t.append("/", style="dim")
+    t.append(str(a.score), style="bold" if a.score >= 50 else "dim")
+    return t
+
+
 def _status_priority(baseline_status: int, status_code: int) -> int:
     if status_code < 0:
         return 0
@@ -149,6 +271,9 @@ def _print_top_interesting_section(
     *,
     top_limit: int,
     top_min_score: int,
+    insecure: bool,
+    follow_redirects: bool,
+    timeout: float,
 ) -> None:
     top = _rank_interesting_rows(
         baseline_status,
@@ -159,23 +284,52 @@ def _print_top_interesting_section(
     )
     if not top:
         return
-    table = Table(title="Top bypasses interesantes", show_lines=False)
-    table.add_column("Rank", justify="right")
+    table = Table(
+        title="Top bypasses interesantes",
+        title_style="bold yellow",
+        show_header=True,
+        header_style="bold magenta",
+        border_style="dim",
+    )
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Score", justify="right")
     table.add_column("Status", justify="right")
     table.add_column("Bytes", justify="right")
     table.add_column("Delta", justify="right")
-    table.add_column("Payload", max_width=42)
+    table.add_column("Payload", max_width=42, overflow="ellipsis")
     table.add_column("Conf/Score", justify="right")
-    for r, a, delta, rank in top:
+    for idx, (r, a, delta, comp_rank) in enumerate(top):
         table.add_row(
-            str(rank),
-            f"{baseline_status}->{r.status_code}",
-            f"{baseline_len}->{r.body_length}",
-            str(delta),
-            _payload_label(r),
-            f"{a.confidence}/{a.score}",
+            Text(str(idx + 1), style=_top_index_style(idx)),
+            Text(str(comp_rank), style=_top_index_style(idx)),
+            _text_pair_status(baseline_status, r.status_code),
+            _text_pair_bytes(baseline_len, r.body_length),
+            Text(str(delta), style=_delta_style(delta)),
+            Text(_payload_label(r), style="white"),
+            _text_conf_score(a),
         )
     console.print(table)
+    console.print("[bold green]Curl para reproducir (copiar y pegar)[/] [dim]· ajusta -k/-L según tu entorno[/]")
+    for idx, (r, a, delta, comp_rank) in enumerate(top):
+        cmd = tryresult_to_curl(
+            r,
+            insecure=insecure,
+            follow_redirects=follow_redirects,
+            max_time=timeout,
+        )
+        smug = r.spec.smuggling_payload is not None
+        line = Text()
+        line.append(f"#{idx + 1} ", style=_top_index_style(idx))
+        line.append(f"(rank {comp_rank}) ", style="dim")
+        line.append("· ", style="dim")
+        line.append(a.confidence, style=_confidence_badge_style(a.confidence))
+        line.append(f" · Δ{delta} B", style="dim")
+        console.print(line)
+        if smug:
+            console.print("  [dim]Nota: smuggling-lite; curl puede no coincidir byte a byte con el raw enviado.[/]")
+        console.print(Text(cmd, style="green"), soft_wrap=True)
+        if idx < len(top) - 1:
+            console.print()
 
 
 def _version_callback(value: bool) -> None:
@@ -395,6 +549,9 @@ def probe(
         visible_rows,
         top_limit=top_limit,
         top_min_score=top_min_score,
+        insecure=insecure,
+        follow_redirects=follow,
+        timeout=timeout,
     )
     smuggle_hits = sum(1 for _, a in visible_rows if "smuggling_suspected" in a.reasons)
     host_hits = sum(1 for r, _ in visible_rows if r.spec.host_payload is not None)
