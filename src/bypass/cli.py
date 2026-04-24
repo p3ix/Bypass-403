@@ -191,16 +191,16 @@ def tryresult_to_curl(
 
     for key in sorted(s.headers, key=str.lower):
         val = s.headers[key]
-        curl_args.extend(["-H", shlex.quote(f"{key}: {val}")])
+        curl_args.extend(["-H", f"{key}: {val}"])
 
     if s.body:
         b64 = base64.b64encode(s.body).decode("ascii")
         body_curl = list(curl_args)
         body_curl.extend(["--data-binary", "@-"])
-        body_curl.append(shlex.quote(s.url))
+        body_curl.append(s.url)
         return f"printf '%s' {shlex.quote(b64)} | base64 -d | {shlex.join(body_curl)}"
 
-    curl_args.append(shlex.quote(s.url))
+    curl_args.append(s.url)
     return shlex.join(curl_args)
 
 
@@ -229,6 +229,32 @@ def _text_conf_score(a: AnalysisResult) -> Text:
     t.append("/", style="dim")
     t.append(str(a.score), style="bold" if a.score >= 50 else "dim")
     return t
+
+
+def _header_diff_text(
+    current_headers: dict[str, str],
+    baseline_headers: dict[str, str] | None = None,
+    *,
+    limit: int = 4,
+) -> str:
+    base = baseline_headers or {}
+    keys = sorted(set(base) | set(current_headers), key=str.lower)
+    changes: list[str] = []
+    for k in keys:
+        b = base.get(k)
+        c = current_headers.get(k)
+        if b is None and c is not None:
+            changes.append(f"+{k}={c}")
+        elif b is not None and c is None:
+            changes.append(f"-{k}")
+        elif b != c and c is not None:
+            changes.append(f"~{k}={c}")
+    if not changes:
+        return "sin cambios"
+    shown = changes[: max(0, limit)]
+    if len(changes) > len(shown):
+        shown.append(f"...(+{len(changes) - len(shown)} más)")
+    return " | ".join(shown)
 
 
 def _status_priority(baseline_status: int, status_code: int) -> int:
@@ -274,6 +300,7 @@ def _print_top_interesting_section(
     insecure: bool,
     follow_redirects: bool,
     timeout: float,
+    baseline_headers: dict[str, str] | None = None,
 ) -> None:
     top = _rank_interesting_rows(
         baseline_status,
@@ -327,6 +354,9 @@ def _print_top_interesting_section(
         console.print(line)
         if smug:
             console.print("  [dim]Nota: smuggling-lite; curl puede no coincidir byte a byte con el raw enviado.[/]")
+        console.print(f"[dim]URL exacta:[/] {r.spec.url}")
+        hd = _header_diff_text(r.spec.headers, baseline_headers, limit=4)
+        console.print(f"[dim]Headers diff:[/] {hd}")
         console.print(Text(cmd, style="green"), soft_wrap=True)
         if idx < len(top) - 1:
             console.print()
@@ -552,6 +582,7 @@ def probe(
         insecure=insecure,
         follow_redirects=follow,
         timeout=timeout,
+        baseline_headers={},
     )
     smuggle_hits = sum(1 for _, a in visible_rows if "smuggling_suspected" in a.reasons)
     host_hits = sum(1 for r, _ in visible_rows if r.spec.host_payload is not None)

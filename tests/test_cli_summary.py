@@ -1,4 +1,4 @@
-from bypass.cli import _rank_interesting_rows, _summarize_rows, tryresult_to_curl
+from bypass.cli import _header_diff_text, _rank_interesting_rows, _summarize_rows, tryresult_to_curl
 from bypass.models import AnalysisResult, RequestSpec, TryResult
 
 
@@ -56,6 +56,8 @@ def test_tryresult_to_curl_includes_url_and_header() -> None:
     assert "5" in line
     assert "X-Test" in line
     assert "example.com" in line
+    assert "''\"'\"'" not in line
+    assert "-H 'X-Test: 1'" in line
 
 
 def test_tryresult_to_curl_body_uses_base64_pipe() -> None:
@@ -83,3 +85,12 @@ def test_tryresult_to_curl_http1_0_hint() -> None:
     r = TryResult(spec=spec, status_code=200, body_length=0, final_url=spec.url)
     line = tryresult_to_curl(r)
     assert "--http1.0" in line
+
+
+def test_header_diff_text_reports_add_change_remove() -> None:
+    base = {"A": "1", "B": "2"}
+    cur = {"A": "9", "C": "3"}
+    out = _header_diff_text(cur, base, limit=10)
+    assert "~A=9" in out
+    assert "-B" in out
+    assert "+C=3" in out
