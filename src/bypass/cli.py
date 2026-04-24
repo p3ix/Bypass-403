@@ -124,6 +124,21 @@ def _normalize_domain_target(raw: str) -> str:
     return f"{u.scheme}://{u.netloc}{path}"
 
 
+def _resolve_full_probe_settings(
+    *,
+    full: bool,
+    mode: str,
+    combine: bool,
+    profile: str,
+    guided_combos: bool,
+    host_fuzz: bool,
+    smuggling_lite: bool,
+) -> tuple[str, bool, str, bool, bool, bool]:
+    if not full:
+        return mode, combine, profile, guided_combos, host_fuzz, smuggling_lite
+    return "all", True, "aggressive", True, True, True
+
+
 def _http_code_style(code: int) -> str:
     if code < 0:
         return "red"
@@ -469,6 +484,10 @@ def probe(
         int,
         typer.Option("--smuggling-limit", help="Maximo de probes smuggling por target"),
     ] = 20,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Activa modo full: all+combine+aggressive+guided+host-fuzz+smuggling-lite"),
+    ] = False,
     top_limit: Annotated[
         int,
         typer.Option("--top-limit", help="Maximo de hallazgos en Top bypasses"),
@@ -479,6 +498,15 @@ def probe(
     ] = 35,
 ) -> None:
     """Envía el catálogo de bypass sobre la URL indicada (solo en alcances que te autorice el propietario)."""
+    mode, combine, profile, guided_combos, host_fuzz, smuggling_lite = _resolve_full_probe_settings(
+        full=full,
+        mode=mode,
+        combine=combine,
+        profile=profile,
+        guided_combos=guided_combos,
+        host_fuzz=host_fuzz,
+        smuggling_lite=smuggling_lite,
+    )
     filter_interesting = not all_results
     methods = method if method else ["GET"]
     progress_stats = {"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0, "err": 0}
@@ -628,6 +656,10 @@ def domain_probe(
     host_fuzz_value: Annotated[list[str] | None, typer.Option("--host-fuzz-value")] = None,
     max_vhost_payloads: Annotated[int, typer.Option("--max-vhost-payloads")] = 30,
     auth_challenges: Annotated[bool, typer.Option("--auth-challenges/--no-auth-challenges")] = True,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Activa modo full dominio: aggressive + host/smuggling/guided/auth"),
+    ] = False,
     all_results: Annotated[bool, typer.Option("--all")] = False,
     top_limit: Annotated[int, typer.Option("--top-limit")] = 10,
     top_min_score: Annotated[int, typer.Option("--top-min-score")] = 35,
@@ -635,6 +667,10 @@ def domain_probe(
     output_csv: Annotated[str | None, typer.Option("--csv")] = None,
 ) -> None:
     url = _normalize_domain_target(target)
+    if full:
+        profile = "aggressive"
+        auth_challenges = True
+        max_vhost_payloads = max(max_vhost_payloads, 40)
     methods = method if method else ["GET"]
     base, results = run_probe(
         url,
@@ -708,9 +744,16 @@ def domain_batch(
     insecure: Annotated[bool, typer.Option("-k")] = False,
     follow: Annotated[bool, typer.Option("-L")] = False,
     auth_challenges: Annotated[bool, typer.Option("--auth-challenges/--no-auth-challenges")] = True,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Activa modo full dominio para todo el batch"),
+    ] = False,
     out_dir: Annotated[str, typer.Option("--out-dir")] = "out-domain",
     all_results: Annotated[bool, typer.Option("--all")] = False,
 ) -> None:
+    if full:
+        profile = "aggressive"
+        auth_challenges = True
     rows = [line.strip() for line in Path(input_file).read_text(encoding="utf-8").splitlines() if line.strip()]
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     summary: list[dict[str, object]] = []

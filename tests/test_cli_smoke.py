@@ -18,6 +18,7 @@ def test_probe_help_contains_profiles() -> None:
     assert "all" in result.stdout
     assert "--host-fuzz" in result.stdout
     assert "--smuggling-lite" in result.stdout
+    assert "--full" in result.stdout
     assert "--top-limit" in result.stdout
     assert "--top-min-score" in result.stdout
 
@@ -33,9 +34,11 @@ def test_domain_probe_help_contains_domain_flags() -> None:
     result = runner.invoke(app, ["domain-probe", "--help"])
     assert result.exit_code == 0
     assert "auth-challenges" in result.stdout
+    assert "--full" in result.stdout
 
 
 def test_domain_batch_help_works() -> None:
     result = runner.invoke(app, ["domain-batch", "--help"])
     assert result.exit_code == 0
     assert "--out-dir" in result.stdout
+    assert "--full" in result.stdout
