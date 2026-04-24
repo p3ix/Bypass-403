@@ -4,6 +4,7 @@ import csv
 from pathlib import Path
 
 from bypass.models import AnalysisResult, TryResult
+from bypass.safety import redact_text, sanitize_url
 
 
 def export_csv(output_path: str, rows: list[tuple[TryResult, AnalysisResult]]) -> None:
@@ -38,14 +39,14 @@ def export_csv(output_path: str, rows: list[tuple[TryResult, AnalysisResult]]) -
             writer.writerow(
                 [
                     r.spec.method,
-                    r.spec.url,
+                    sanitize_url(r.spec.url),
                     r.status_code,
                     r.body_length,
-                    r.final_url,
-                    r.error or "",
+                    sanitize_url(r.final_url),
+                    redact_text(r.error or ""),
                     r.spec.target_type,
                     r.spec.family or "",
-                    r.response_headers.get("www-authenticate", ""),
+                    redact_text(r.response_headers.get("www-authenticate", "")),
                     r.spec.path_payload.label if r.spec.path_payload else "",
                     r.spec.header_payload.label if r.spec.header_payload else "",
                     r.spec.method_payload.label if r.spec.method_payload else "",

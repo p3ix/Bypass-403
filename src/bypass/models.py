@@ -73,6 +73,8 @@ class BaselineSnapshot:
     server_header: str = ""
     calibration: dict[str, Any] = field(default_factory=dict)
     response_headers: dict[str, str] = field(default_factory=dict)
+    body_title: str = ""
+    content_type: str = ""
 
 
 @dataclass

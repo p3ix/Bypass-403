@@ -6,7 +6,7 @@ import shlex
 from collections import Counter
 from pathlib import Path
 from typing import Annotated, Literal
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import typer
 from rich.console import Console
@@ -26,6 +26,14 @@ from bypass.payloads.protocols_403 import protocol_payloads
 from bypass.payloads.smuggling_lite import smuggling_lite_payloads
 from bypass.reporters.csv_reporter import export_csv
 from bypass.reporters.json_reporter import export_json
+from bypass.safety import (
+    RequestThrottle,
+    ScopePolicy,
+    is_redirect_target_allowed,
+    is_url_in_scope,
+    redact_text,
+    sanitize_url,
+)
 
 app = typer.Typer(
     name="bypass",
@@ -122,6 +130,29 @@ def _normalize_domain_target(raw: str) -> str:
     u = urlsplit(v)
     path = u.path or "/"
     return f"{u.scheme}://{u.netloc}{path}"
+
+
+def _build_scope_policy(
+    *,
+    scope_host: list[str] | None,
+    scope_suffix: list[str] | None,
+    deny_private_ip: bool,
+    allow_cross_host_redirects: bool,
+) -> ScopePolicy:
+    return ScopePolicy(
+        allowed_hosts=tuple(scope_host or []),
+        allowed_suffixes=tuple(scope_suffix or []),
+        deny_private_ip=deny_private_ip,
+        allow_cross_host_redirects=allow_cross_host_redirects,
+    )
+
+
+def _ensure_url_allowed(url: str, policy: ScopePolicy, *, label: str = "target") -> None:
+    allowed, reason = is_url_in_scope(url, policy)
+    if allowed:
+        return
+    console.print(f"[red]{label} bloqueado por policy:[/] {url} [dim]({reason})[/]")
+    raise typer.Exit(2)
 
 
 def _resolve_full_probe_settings(
@@ -496,6 +527,37 @@ def probe(
         int,
         typer.Option("--top-min-score", help="Score minimo para entrar al Top"),
     ] = 35,
+    scope_host: Annotated[
+        list[str] | None,
+        typer.Option("--scope-host", help="Host exacto permitido (repetible)"),
+    ] = None,
+    scope_suffix: Annotated[
+        list[str] | None,
+        typer.Option("--scope-suffix", help="Sufijo de dominio permitido, ej .example.com"),
+    ] = None,
+    deny_private_ip: Annotated[
+        bool,
+        typer.Option("--deny-private-ip/--allow-private-ip", help="Bloquear IPs privadas/localhost"),
+    ] = True,
+    allow_cross_host_redirects: Annotated[
+        bool,
+        typer.Option(
+            "--allow-cross-host-redirects/--same-host-redirects",
+            help="Permitir seguir redirects fuera del host original",
+        ),
+    ] = False,
+    rate_limit: Annotated[
+        float,
+        typer.Option("--rate", help="Requests por segundo; 0 desactiva el limitador"),
+    ] = 0.0,
+    jitter_ms: Annotated[
+        int,
+        typer.Option("--delay-jitter-ms", help="Jitter aleatorio antes de cada request"),
+    ] = 0,
+    backoff_ms: Annotated[
+        int,
+        typer.Option("--backoff-ms", help="Backoff aplicado tras 429/503"),
+    ] = 1000,
 ) -> None:
     """Envía el catálogo de bypass sobre la URL indicada (solo en alcances que te autorice el propietario)."""
     mode, combine, profile, guided_combos, host_fuzz, smuggling_lite = _resolve_full_probe_settings(
@@ -507,6 +569,13 @@ def probe(
         host_fuzz=host_fuzz,
         smuggling_lite=smuggling_lite,
     )
+    scope_policy = _build_scope_policy(
+        scope_host=scope_host,
+        scope_suffix=scope_suffix,
+        deny_private_ip=deny_private_ip,
+        allow_cross_host_redirects=allow_cross_host_redirects,
+    )
+    _ensure_url_allowed(url, scope_policy)
     filter_interesting = not all_results
     methods = method if method else ["GET"]
     progress_stats = {"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0, "err": 0}
@@ -564,6 +633,10 @@ def probe(
             enable_smuggling_lite=smuggling_lite,
             smuggling_limit=smuggling_limit,
             progress_callback=on_progress,
+            scope_policy=scope_policy,
+            rate_limit=rate_limit,
+            jitter_ms=jitter_ms,
+            backoff_ms=backoff_ms,
         )
     if base.status_code < 0 and filter_interesting:
         filter_interesting = False
@@ -665,8 +738,25 @@ def domain_probe(
     top_min_score: Annotated[int, typer.Option("--top-min-score")] = 35,
     output_json: Annotated[str | None, typer.Option("--json")] = None,
     output_csv: Annotated[str | None, typer.Option("--csv")] = None,
+    scope_host: Annotated[list[str] | None, typer.Option("--scope-host")] = None,
+    scope_suffix: Annotated[list[str] | None, typer.Option("--scope-suffix")] = None,
+    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = True,
+    allow_cross_host_redirects: Annotated[
+        bool,
+        typer.Option("--allow-cross-host-redirects/--same-host-redirects"),
+    ] = False,
+    rate_limit: Annotated[float, typer.Option("--rate")] = 0.0,
+    jitter_ms: Annotated[int, typer.Option("--delay-jitter-ms")] = 0,
+    backoff_ms: Annotated[int, typer.Option("--backoff-ms")] = 1000,
 ) -> None:
     url = _normalize_domain_target(target)
+    scope_policy = _build_scope_policy(
+        scope_host=scope_host,
+        scope_suffix=scope_suffix,
+        deny_private_ip=deny_private_ip,
+        allow_cross_host_redirects=allow_cross_host_redirects,
+    )
+    _ensure_url_allowed(url, scope_policy)
     if full:
         profile = "aggressive"
         auth_challenges = True
@@ -689,6 +779,10 @@ def domain_probe(
         domain_mode=True,
         auth_challenges=auth_challenges,
         max_vhost_payloads=max(1, max_vhost_payloads),
+        scope_policy=scope_policy,
+        rate_limit=rate_limit,
+        jitter_ms=jitter_ms,
+        backoff_ms=backoff_ms,
     )
     visible_rows = [(r, a) for r, a in results if (a.interesting or all_results)]
     console.print(f"[bold]Domain baseline[/] {url} -> {base.status_code} [dim]({base.body_length} B)[/]")
@@ -750,15 +844,35 @@ def domain_batch(
     ] = False,
     out_dir: Annotated[str, typer.Option("--out-dir")] = "out-domain",
     all_results: Annotated[bool, typer.Option("--all")] = False,
+    scope_host: Annotated[list[str] | None, typer.Option("--scope-host")] = None,
+    scope_suffix: Annotated[list[str] | None, typer.Option("--scope-suffix")] = None,
+    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = True,
+    allow_cross_host_redirects: Annotated[
+        bool,
+        typer.Option("--allow-cross-host-redirects/--same-host-redirects"),
+    ] = False,
+    rate_limit: Annotated[float, typer.Option("--rate")] = 0.0,
+    jitter_ms: Annotated[int, typer.Option("--delay-jitter-ms")] = 0,
+    backoff_ms: Annotated[int, typer.Option("--backoff-ms")] = 1000,
 ) -> None:
     if full:
         profile = "aggressive"
         auth_challenges = True
+    scope_policy = _build_scope_policy(
+        scope_host=scope_host,
+        scope_suffix=scope_suffix,
+        deny_private_ip=deny_private_ip,
+        allow_cross_host_redirects=allow_cross_host_redirects,
+    )
     rows = [line.strip() for line in Path(input_file).read_text(encoding="utf-8").splitlines() if line.strip()]
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     summary: list[dict[str, object]] = []
     for idx, raw in enumerate(rows, start=1):
         url = _normalize_domain_target(raw)
+        allowed, reason = is_url_in_scope(url, scope_policy)
+        if not allowed:
+            console.print(f"[yellow]{idx}/{len(rows)}[/] {url} omitido [dim]({reason})[/]")
+            continue
         base, results = run_probe(
             url,
             mode="all",
@@ -772,6 +886,10 @@ def domain_batch(
             guided_combos=True,
             domain_mode=True,
             auth_challenges=auth_challenges,
+            scope_policy=scope_policy,
+            rate_limit=rate_limit,
+            jitter_ms=jitter_ms,
+            backoff_ms=backoff_ms,
         )
         visible_rows = [(r, a) for r, a in results if (a.interesting or all_results)]
         stem = f"domain_{idx:03d}"
@@ -781,9 +899,9 @@ def domain_batch(
         export_csv(csv_path, visible_rows)
         summary.append(
             {
-                "target": url,
+                "target": sanitize_url(url),
                 "baseline_status": base.status_code,
-                "www_authenticate": base.response_headers.get("www-authenticate", ""),
+                "www_authenticate": redact_text(base.response_headers.get("www-authenticate", "")),
                 "total_requests": len(results),
                 "interesting_rows": len(visible_rows),
                 "json": json_path,
@@ -817,7 +935,23 @@ def batch(
     host_fuzz_value: Annotated[list[str] | None, typer.Option("--host-fuzz-value")] = None,
     smuggling_lite: Annotated[bool, typer.Option("--smuggling-lite/--no-smuggling-lite")] = False,
     smuggling_limit: Annotated[int, typer.Option("--smuggling-limit")] = 20,
+    scope_host: Annotated[list[str] | None, typer.Option("--scope-host")] = None,
+    scope_suffix: Annotated[list[str] | None, typer.Option("--scope-suffix")] = None,
+    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = True,
+    allow_cross_host_redirects: Annotated[
+        bool,
+        typer.Option("--allow-cross-host-redirects/--same-host-redirects"),
+    ] = False,
+    rate_limit: Annotated[float, typer.Option("--rate")] = 0.0,
+    jitter_ms: Annotated[int, typer.Option("--delay-jitter-ms")] = 0,
+    backoff_ms: Annotated[int, typer.Option("--backoff-ms")] = 1000,
 ) -> None:
+    scope_policy = _build_scope_policy(
+        scope_host=scope_host,
+        scope_suffix=scope_suffix,
+        deny_private_ip=deny_private_ip,
+        allow_cross_host_redirects=allow_cross_host_redirects,
+    )
     urls = [line.strip() for line in Path(input_file).read_text(encoding="utf-8").splitlines() if line.strip()]
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     summary: list[dict[str, object]] = []
@@ -831,6 +965,11 @@ def batch(
     ) as progress:
         task_id = progress.add_task("targets", total=max(1, len(urls)))
         for idx, url in enumerate(urls, start=1):
+            allowed, reason = is_url_in_scope(url, scope_policy)
+            if not allowed:
+                progress.update(task_id, completed=idx)
+                console.print(f"[yellow]{idx}/{len(urls)}[/] {url} omitido [dim]({reason})[/]")
+                continue
             base, rows = run_probe(
                 url,
                 mode=mode,
@@ -846,6 +985,10 @@ def batch(
                 host_fuzz_values=host_fuzz_value or [],
                 enable_smuggling_lite=smuggling_lite,
                 smuggling_limit=smuggling_limit,
+                scope_policy=scope_policy,
+                rate_limit=rate_limit,
+                jitter_ms=jitter_ms,
+                backoff_ms=backoff_ms,
             )
             visible_rows = [(r, a) for r, a in rows if (a.interesting or all_results)]
             stem = f"target_{idx:03d}"
@@ -855,7 +998,7 @@ def batch(
             export_csv(csv_path, visible_rows)
             summary.append(
                 {
-                    "url": url,
+                    "url": sanitize_url(url),
                     "baseline_status": base.status_code,
                     "calibration": base.calibration,
                     "total_requests": len(rows),
@@ -885,9 +1028,25 @@ def replay(
     replay_methods: Annotated[bool, typer.Option("--replay-methods/--no-replay-methods")] = True,
     replay_headers: Annotated[bool, typer.Option("--replay-headers/--no-replay-headers")] = True,
     header_limit: Annotated[int, typer.Option("--header-limit", help="Cuantos header payloads probar por hallazgo")] = 6,
+    scope_host: Annotated[list[str] | None, typer.Option("--scope-host")] = None,
+    scope_suffix: Annotated[list[str] | None, typer.Option("--scope-suffix")] = None,
+    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = True,
+    allow_cross_host_redirects: Annotated[
+        bool,
+        typer.Option("--allow-cross-host-redirects/--same-host-redirects"),
+    ] = False,
+    rate_limit: Annotated[float, typer.Option("--rate")] = 0.0,
+    jitter_ms: Annotated[int, typer.Option("--delay-jitter-ms")] = 0,
+    backoff_ms: Annotated[int, typer.Option("--backoff-ms")] = 1000,
 ) -> None:
     from bypass.http_client import make_client
 
+    scope_policy = _build_scope_policy(
+        scope_host=scope_host,
+        scope_suffix=scope_suffix,
+        deny_private_ip=deny_private_ip,
+        allow_cross_host_redirects=allow_cross_host_redirects,
+    )
     data = json.loads(Path(input_json).read_text(encoding="utf-8"))
     if "results" in data:
         results = data["results"]
@@ -907,6 +1066,9 @@ def replay(
     for item in filtered:
         base_url = item.get("url")
         if not base_url:
+            continue
+        allowed, _reason = is_url_in_scope(base_url, scope_policy)
+        if not allowed:
             continue
         base_method = str(item.get("method", "GET")).upper()
         base_headers = item.get("headers") or {}
@@ -928,7 +1090,8 @@ def replay(
                     (base_method, base_url, {**dict(base_headers), **hdrs}, f"header:{hp.id}")
                 )
 
-    with make_client(timeout, not insecure, follow) as client:
+    throttle = RequestThrottle(rate_per_second=max(rate_limit, 0.0), jitter_ms=max(jitter_ms, 0), backoff_ms=max(backoff_ms, 0))
+    with make_client(timeout, not insecure, False) as client:
         table = Table(title="Replay resultados", show_lines=False)
         table.add_column("Metodo")
         table.add_column("Codigo")
@@ -937,9 +1100,31 @@ def replay(
         table.add_column("URL", max_width=60)
         for method, url, headers, source in attempt_rows:
             try:
-                response = client.request(method, url, headers=headers)
+                active_method = method
+                active_url = url
+                for hop in range(6):
+                    allowed, reason = is_url_in_scope(active_url, scope_policy)
+                    if not allowed:
+                        raise RuntimeError(reason or "scope_blocked")
+                    throttle.before_request()
+                    response = client.request(active_method, active_url, headers=headers, follow_redirects=False)
+                    throttle.after_response(response.status_code)
+                    if not follow or not response.is_redirect:
+                        break
+                    location = response.headers.get("location")
+                    if not location:
+                        break
+                    next_url = str(urljoin(str(response.url), location))
+                    allowed, reason = is_redirect_target_allowed(active_url, next_url, scope_policy)
+                    if not allowed:
+                        raise RuntimeError(reason or "redirect_blocked")
+                    if response.status_code in {301, 302, 303} and active_method.upper() not in {"GET", "HEAD"}:
+                        active_method = "GET"
+                    active_url = next_url
+                else:
+                    raise RuntimeError("too_many_redirects")
                 table.add_row(
-                    method,
+                    active_method,
                     str(response.status_code),
                     str(len(response.content or b"")),
                     source,

@@ -21,6 +21,8 @@ def test_probe_help_contains_profiles() -> None:
     assert "--full" in result.stdout
     assert "--top-limit" in result.stdout
     assert "--top-min-score" in result.stdout
+    assert "--scope-host" in result.stdout
+    assert "--rate" in result.stdout
 
 
 def test_replay_help_contains_advanced_flags() -> None:
@@ -28,6 +30,8 @@ def test_replay_help_contains_advanced_flags() -> None:
     assert result.exit_code == 0
     assert "--min-confidence" in result.stdout
     assert "--replay-methods" in result.stdout
+    assert "--scope-suffix" in result.stdout
+    assert "--delay-jitter-ms" in result.stdout
 
 
 def test_domain_probe_help_contains_domain_flags() -> None:
@@ -42,3 +46,9 @@ def test_domain_batch_help_works() -> None:
     assert result.exit_code == 0
     assert "--out-dir" in result.stdout
     assert "--full" in result.stdout
+
+
+def test_probe_blocks_private_ip_by_default() -> None:
+    result = runner.invoke(app, ["probe", "http://127.0.0.1/admin"])
+    assert result.exit_code == 2
+    assert "private_host_blocked" in result.stdout

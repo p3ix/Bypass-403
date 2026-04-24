@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from collections import Counter
 import http.client
+import hashlib
 from statistics import pstdev
 from typing import Callable
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 import ssl
+import re
 
 import httpx
 
@@ -22,6 +24,7 @@ from bypass.payloads.paths_403 import all_path_variants
 from bypass.payloads.protocols_403 import protocol_payloads
 from bypass.payloads.query_403 import query_mutations
 from bypass.payloads.smuggling_lite import smuggling_lite_payloads
+from bypass.safety import RequestThrottle, ScopePolicy, is_redirect_target_allowed, is_url_in_scope
 
 
 @dataclass
@@ -33,6 +36,52 @@ class RuntimeProfile:
 
 SAFE_PROFILE = RuntimeProfile(name="safe", combine_limit=500, length_delta=70)
 AGGRESSIVE_PROFILE = RuntimeProfile(name="aggressive", combine_limit=5000, length_delta=40)
+BaselineKey = tuple[str, str, str]
+
+
+def _extract_title(body_sample: str) -> str:
+    if not body_sample:
+        return ""
+    m = re.search(r"<title[^>]*>(.*?)</title>", body_sample, flags=re.IGNORECASE | re.DOTALL)
+    if not m:
+        return ""
+    return " ".join(m.group(1).split())[:160]
+
+
+def _spec_family_name(spec: RequestSpec) -> str:
+    if spec.family:
+        return spec.family
+    if spec.smuggling_payload is not None:
+        return "smuggling"
+    if spec.host_payload is not None:
+        return "host"
+    if spec.protocol_payload is not None:
+        return "protocol"
+    if spec.method_payload is not None:
+        return "methods"
+    if spec.query_payload is not None:
+        return "query"
+    if spec.header_payload is not None:
+        return "headers"
+    if spec.path_payload is not None:
+        return "path"
+    return "general"
+
+
+def _baseline_key_for_spec(spec: RequestSpec) -> BaselineKey:
+    return (
+        spec.method.upper(),
+        spec.protocol_hint or "http1_1",
+        _spec_family_name(spec),
+    )
+
+
+def _baseline_transport_key(method: str, protocol_hint: str | None) -> tuple[str, str]:
+    return (method.upper(), protocol_hint or "http1_1")
+
+
+def _baseline_body_for_method(method: str) -> bytes | None:
+    return b"{}" if method.upper() in {"POST", "PUT", "PATCH"} else None
 
 
 def compute_dynamic_length_delta(lengths: list[int], floor: int) -> int:
@@ -62,11 +111,53 @@ def _calibrate_target(
     *,
     samples: int,
     floor_delta: int,
+    method: str = "GET",
+    body: bytes | None = None,
+    protocol_hint: str | None = None,
+    timeout: float = 15.0,
+    verify: bool = True,
+    proxy: str | None = None,
+    scope_policy: ScopePolicy | None = None,
+    follow_redirects: bool = False,
+    throttle: RequestThrottle | None = None,
 ) -> dict[str, object]:
     statuses: list[int] = []
     lengths: list[int] = []
     for url in _calibration_urls(target_url, samples):
-        st, ln, _, _, _, err = _fetch(client, "GET", url, headers)
+        if protocol_hint == "http2":
+            with make_client(timeout, verify, False, proxy, http2=True) as pclient:
+                st, ln, _, _, _, err = _fetch(
+                    pclient,
+                    method,
+                    url,
+                    headers,
+                    body,
+                    scope_policy=scope_policy,
+                    follow_redirects=follow_redirects,
+                    throttle=throttle,
+                )
+        elif protocol_hint == "http1_0":
+            st, ln, _, _, _, err = _fetch_http10(
+                method,
+                url,
+                headers,
+                timeout=timeout,
+                verify=verify,
+                body=body,
+                scope_policy=scope_policy,
+                throttle=throttle,
+            )
+        else:
+            st, ln, _, _, _, err = _fetch(
+                client,
+                method,
+                url,
+                headers,
+                body,
+                scope_policy=scope_policy,
+                follow_redirects=follow_redirects,
+                throttle=throttle,
+            )
         if err:
             continue
         statuses.append(st)
@@ -90,16 +181,51 @@ def _fetch(
     url: str,
     headers: dict[str, str] | None,
     body: bytes | None = None,
+    scope_policy: ScopePolicy | None = None,
+    follow_redirects: bool = False,
+    throttle: RequestThrottle | None = None,
+    max_redirects: int = 5,
 ) -> tuple[int, int, str, str, dict[str, str], str | None]:
     h = dict(headers or {})
     try:
-        r = client.request(method, url, headers=h, content=body)
+        active_url = url
+        active_method = method
+        active_body = body
+        max_hops = max_redirects if follow_redirects else 0
+        for redirect_hop in range(max_hops + 1):
+            if scope_policy is not None:
+                allowed, reason = is_url_in_scope(active_url, scope_policy)
+                if not allowed:
+                    return -1, 0, active_url, "", {}, reason
+            if throttle is not None:
+                throttle.before_request()
+            request = client.build_request(active_method, active_url, headers=h, content=active_body)
+            r = client.send(request, follow_redirects=False)
+            if throttle is not None:
+                throttle.after_response(r.status_code)
+            if not follow_redirects or not r.is_redirect:
+                break
+            if redirect_hop >= max_hops:
+                return -1, 0, active_url, "", {}, "too_many_redirects"
+            location = r.headers.get("location")
+            if not location:
+                break
+            next_url = str(urljoin(str(r.url), location))
+            if scope_policy is not None:
+                allowed, reason = is_redirect_target_allowed(active_url, next_url, scope_policy)
+                if not allowed:
+                    return -1, 0, next_url, "", {}, reason
+            if r.status_code in {301, 302, 303} and active_method.upper() not in {"GET", "HEAD"}:
+                active_method = "GET"
+                active_body = None
+            active_url = next_url
         content = r.content or b""
         body_sample = content[:400].decode("utf-8", errors="replace")
         resp_headers = {
             "www-authenticate": r.headers.get("www-authenticate", ""),
             "location": r.headers.get("location", ""),
             "server": r.headers.get("server", ""),
+            "content-type": r.headers.get("content-type", ""),
         }
         return r.status_code, len(content), str(r.url), body_sample, resp_headers, None
     except Exception as e:
@@ -114,17 +240,25 @@ def _fetch_http10(
     timeout: float,
     verify: bool,
     body: bytes | None = None,
+    scope_policy: ScopePolicy | None = None,
+    throttle: RequestThrottle | None = None,
 ) -> tuple[int, int, str, str, dict[str, str], str | None]:
     try:
         u = urlsplit(url)
         if not u.scheme or not u.netloc:
             return -1, 0, url, "", {}, "invalid_url"
+        if scope_policy is not None:
+            allowed, reason = is_url_in_scope(url, scope_policy)
+            if not allowed:
+                return -1, 0, url, "", {}, reason
         path_q = u.path or "/"
         if u.query:
             path_q = f"{path_q}?{u.query}"
         hdrs = dict(headers or {})
         if "Host" not in hdrs and u.netloc:
             hdrs["Host"] = u.netloc
+        if throttle is not None:
+            throttle.before_request()
         if u.scheme == "https":
             ctx = ssl.create_default_context()
             if not verify:
@@ -140,10 +274,13 @@ def _fetch_http10(
         raw = resp.read() or b""
         sample = raw[:400].decode("utf-8", errors="replace")
         conn.close()
+        if throttle is not None:
+            throttle.after_response(int(resp.status))
         resp_headers = {
             "www-authenticate": resp.getheader("www-authenticate", "") or "",
             "location": resp.getheader("location", "") or "",
             "server": resp.getheader("server", "") or "",
+            "content-type": resp.getheader("content-type", "") or "",
         }
         return int(resp.status), len(raw), url, sample, resp_headers, None
     except Exception as e:
@@ -381,7 +518,157 @@ def _build_specs(
         specs = specs[: profile.combine_limit + combo_limit]
     if len(specs) > profile.combine_limit:
         specs = specs[: profile.combine_limit]
-    return specs
+    return _dedupe_specs(specs)
+
+
+def _spec_fingerprint(spec: RequestSpec) -> tuple[object, ...]:
+    header_items = tuple(sorted((k.lower(), v) for k, v in spec.headers.items()))
+    body_digest = hashlib.sha256(spec.body or b"").hexdigest() if spec.body is not None else ""
+    return (
+        spec.method.upper(),
+        spec.url,
+        header_items,
+        spec.protocol_hint or "",
+        body_digest,
+        spec.target_type,
+    )
+
+
+def _dedupe_specs(specs: list[RequestSpec]) -> list[RequestSpec]:
+    deduped: list[RequestSpec] = []
+    seen: set[tuple[object, ...]] = set()
+    for spec in specs:
+        fp = _spec_fingerprint(spec)
+        if fp in seen:
+            continue
+        seen.add(fp)
+        deduped.append(spec)
+    return deduped
+
+
+def _fetch_baseline_snapshot(
+    client: httpx.Client,
+    *,
+    target_url: str,
+    headers: dict[str, str],
+    method: str,
+    timeout: float,
+    verify: bool,
+    follow_redirects: bool,
+    proxy: str | None,
+    profile: RuntimeProfile,
+    auto_calibrate: bool,
+    calibration_samples: int,
+    protocol_hint: str | None,
+    scope_policy: ScopePolicy | None,
+    throttle: RequestThrottle,
+) -> BaselineSnapshot:
+    body = _baseline_body_for_method(method)
+    if protocol_hint == "http2":
+        with make_client(timeout, verify, False, proxy, http2=True) as pclient:
+            st, ln, _, baseline_sample, baseline_resp_headers, err = _fetch(
+                pclient,
+                method,
+                target_url,
+                headers,
+                body,
+                scope_policy=scope_policy,
+                follow_redirects=follow_redirects,
+                throttle=throttle,
+            )
+            calibration = (
+                _calibrate_target(
+                    pclient,
+                    target_url,
+                    headers,
+                    samples=max(1, calibration_samples),
+                    floor_delta=profile.length_delta,
+                    method=method,
+                    body=body,
+                    protocol_hint=protocol_hint,
+                    timeout=timeout,
+                    verify=verify,
+                    proxy=proxy,
+                    scope_policy=scope_policy,
+                    follow_redirects=follow_redirects,
+                    throttle=throttle,
+                )
+                if auto_calibrate
+                else {"enabled": False, "samples_ok": 0, "length_delta": profile.length_delta}
+            )
+    elif protocol_hint == "http1_0":
+        st, ln, _, baseline_sample, baseline_resp_headers, err = _fetch_http10(
+            method,
+            target_url,
+            headers,
+            timeout=timeout,
+            verify=verify,
+            body=body,
+            scope_policy=scope_policy,
+            throttle=throttle,
+        )
+        calibration = (
+            _calibrate_target(
+                client,
+                target_url,
+                headers,
+                samples=max(1, calibration_samples),
+                floor_delta=profile.length_delta,
+                method=method,
+                body=body,
+                protocol_hint=protocol_hint,
+                timeout=timeout,
+                verify=verify,
+                proxy=proxy,
+                scope_policy=scope_policy,
+                follow_redirects=follow_redirects,
+                throttle=throttle,
+            )
+            if auto_calibrate
+            else {"enabled": False, "samples_ok": 0, "length_delta": profile.length_delta}
+        )
+    else:
+        st, ln, _, baseline_sample, baseline_resp_headers, err = _fetch(
+            client,
+            method,
+            target_url,
+            headers,
+            body,
+            scope_policy=scope_policy,
+            follow_redirects=follow_redirects,
+            throttle=throttle,
+        )
+        calibration = (
+            _calibrate_target(
+                client,
+                target_url,
+                headers,
+                samples=max(1, calibration_samples),
+                floor_delta=profile.length_delta,
+                method=method,
+                body=body,
+                protocol_hint=protocol_hint,
+                timeout=timeout,
+                verify=verify,
+                proxy=proxy,
+                scope_policy=scope_policy,
+                follow_redirects=follow_redirects,
+                throttle=throttle,
+            )
+            if auto_calibrate
+            else {"enabled": False, "samples_ok": 0, "length_delta": profile.length_delta}
+        )
+    if err:
+        st, ln = -1, 0
+    return BaselineSnapshot(
+        status_code=st,
+        body_length=ln,
+        body_sample=baseline_sample,
+        calibration=calibration,
+        response_headers=baseline_resp_headers,
+        body_title=_extract_title(baseline_sample),
+        content_type=baseline_resp_headers.get("content-type", ""),
+    )
 
 
 def run_probe(
@@ -408,6 +695,10 @@ def run_probe(
     auto_calibrate: bool = True,
     calibration_samples: int = 3,
     progress_callback: Callable[[int, int, TryResult, AnalysisResult], None] | None = None,
+    scope_policy: ScopePolicy | None = None,
+    rate_limit: float = 0.0,
+    jitter_ms: int = 0,
+    backoff_ms: int = 1000,
 ) -> tuple[BaselineSnapshot, list[tuple[TryResult, AnalysisResult]]]:
     profile = AGGRESSIVE_PROFILE if profile_name == "aggressive" else SAFE_PROFILE
     methods = [x.upper() for x in (methods or ["GET"])]
@@ -431,37 +722,74 @@ def run_probe(
     for s in specs:
         s.headers = {**base_hdrs, **s.headers}
 
-    with make_client(timeout, verify, follow_redirects, proxy) as client:
-        st, ln, _, baseline_sample, baseline_resp_headers, err = _fetch(client, "GET", target_url, base_hdrs)
-        if err:
-            st, ln = -1, 0
-        calibration = (
-            _calibrate_target(
-                client,
-                target_url,
-                base_hdrs,
-                samples=max(1, calibration_samples),
-                floor_delta=profile.length_delta,
-            )
-            if auto_calibrate
-            else {"enabled": False, "samples_ok": 0, "length_delta": profile.length_delta}
+    throttle = RequestThrottle(
+        rate_per_second=max(rate_limit, 0.0),
+        jitter_ms=max(jitter_ms, 0),
+        backoff_ms=max(backoff_ms, 0),
+    )
+
+    with make_client(timeout, verify, False, proxy) as client:
+        baseline = _fetch_baseline_snapshot(
+            client,
+            target_url=target_url,
+            headers=base_hdrs,
+            method="GET",
+            timeout=timeout,
+            verify=verify,
+            follow_redirects=follow_redirects,
+            proxy=proxy,
+            profile=profile,
+            auto_calibrate=auto_calibrate,
+            calibration_samples=calibration_samples,
+            protocol_hint=None,
+            scope_policy=scope_policy,
+            throttle=throttle,
         )
-        baseline = BaselineSnapshot(
-            status_code=st,
-            body_length=ln,
-            body_sample=baseline_sample,
-            calibration=calibration,
-            response_headers=baseline_resp_headers,
-        )
-        effective_delta = int(calibration.get("length_delta", profile.length_delta))
+        baseline_cache: dict[BaselineKey, BaselineSnapshot] = {
+            ("GET", "http1_1", "general"): baseline,
+        }
+        transport_baseline_cache: dict[tuple[str, str], BaselineSnapshot] = {
+            _baseline_transport_key("GET", None): baseline,
+        }
 
         results: list[tuple[TryResult, AnalysisResult]] = []
         total = len(specs)
         for idx, s in enumerate(specs, start=1):
+            baseline_key = _baseline_key_for_spec(s)
+            active_baseline = baseline_cache.get(baseline_key)
+            if active_baseline is None:
+                transport_key = _baseline_transport_key(s.method, s.protocol_hint)
+                active_baseline = transport_baseline_cache.get(transport_key)
+                if active_baseline is None:
+                    active_baseline = _fetch_baseline_snapshot(
+                        client,
+                        target_url=target_url,
+                        headers=base_hdrs,
+                        method=s.method,
+                        timeout=timeout,
+                        verify=verify,
+                        follow_redirects=follow_redirects,
+                        proxy=proxy,
+                        profile=profile,
+                        auto_calibrate=auto_calibrate,
+                        calibration_samples=calibration_samples,
+                        protocol_hint=s.protocol_hint,
+                        scope_policy=scope_policy,
+                        throttle=throttle,
+                    )
+                    transport_baseline_cache[transport_key] = active_baseline
+                baseline_cache[baseline_key] = active_baseline
             if s.protocol_hint == "http2":
-                with make_client(timeout, verify, follow_redirects, proxy, http2=True) as pclient:
+                with make_client(timeout, verify, False, proxy, http2=True) as pclient:
                     st2, ln2, final, body_sample, resp_headers, err2 = _fetch(
-                        pclient, s.method, s.url, s.headers, s.body
+                        pclient,
+                        s.method,
+                        s.url,
+                        s.headers,
+                        s.body,
+                        scope_policy=scope_policy,
+                        follow_redirects=follow_redirects,
+                        throttle=throttle,
                     )
             elif s.protocol_hint == "http1_0":
                 st2, ln2, final, body_sample, resp_headers, err2 = _fetch_http10(
@@ -471,9 +799,20 @@ def run_probe(
                     timeout=timeout,
                     verify=verify,
                     body=s.body,
+                    scope_policy=scope_policy,
+                    throttle=throttle,
                 )
             else:
-                st2, ln2, final, body_sample, resp_headers, err2 = _fetch(client, s.method, s.url, s.headers, s.body)
+                st2, ln2, final, body_sample, resp_headers, err2 = _fetch(
+                    client,
+                    s.method,
+                    s.url,
+                    s.headers,
+                    s.body,
+                    scope_policy=scope_policy,
+                    follow_redirects=follow_redirects,
+                    throttle=throttle,
+                )
             tr = TryResult(
                 spec=s,
                 status_code=st2,
@@ -483,10 +822,12 @@ def run_probe(
                 response_headers=resp_headers,
             )
             ar = analyze_result(
-                baseline,
+                active_baseline,
                 tr,
                 body_sample=body_sample,
-                config=AnalyzerConfig(length_delta=effective_delta),
+                config=AnalyzerConfig(
+                    length_delta=int(active_baseline.calibration.get("length_delta", profile.length_delta))
+                ),
             )
             if s.smuggling_payload and tr.status_code in {400, 411, 413, 426, 431, 500, 501, 502, 503, 504}:
                 if "smuggling_suspected" not in ar.reasons:

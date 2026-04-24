@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from difflib import SequenceMatcher
+import re
 
 from bypass.models import AnalysisResult, BaselineSnapshot, TryResult
 
@@ -17,6 +19,27 @@ class AnalyzerConfig:
         "waf",
     )
     auth_schemes: tuple[str, ...] = ("basic", "bearer", "digest", "ntlm", "negotiate")
+    high_similarity_ratio: float = 0.92
+    low_similarity_ratio: float = 0.55
+
+
+def _normalize_text(value: str) -> str:
+    return " ".join((value or "").lower().split())
+
+
+def _extract_title(value: str) -> str:
+    m = re.search(r"<title[^>]*>(.*?)</title>", value or "", flags=re.IGNORECASE | re.DOTALL)
+    if not m:
+        return ""
+    return _normalize_text(m.group(1))
+
+
+def _similarity_ratio(left: str, right: str) -> float:
+    if not left and not right:
+        return 1.0
+    if not left or not right:
+        return 0.0
+    return SequenceMatcher(a=left, b=right).ratio()
 
 
 def analyze_result(
@@ -32,6 +55,8 @@ def analyze_result(
         return AnalysisResult(False, "none", ["request_error"], score=0)
 
     score = 0
+    baseline_body = _normalize_text(baseline.body_sample)
+    current_body = _normalize_text(body_sample)
     if result.status_code != baseline.status_code:
         reasons.append("status_changed")
         score += 45
@@ -48,14 +73,38 @@ def analyze_result(
         reasons.append("length_changed")
         score += 25
 
-    body_low = (body_sample or "").lower()
-    if body_low:
-        if any(token in body_low for token in cfg.soft_403_tokens):
+    if current_body:
+        if any(token in current_body for token in cfg.soft_403_tokens):
             reasons.append("soft_403_marker")
             score -= 20
-        if baseline.body_sample and body_low != baseline.body_sample.lower():
+        if baseline_body and current_body != baseline_body:
             reasons.append("body_sample_changed")
             score += 30
+        similarity = _similarity_ratio(baseline_body, current_body)
+        if similarity <= cfg.low_similarity_ratio:
+            reasons.append("body_similarity_low")
+            score += 20
+        elif similarity >= cfg.high_similarity_ratio and result.status_code == baseline.status_code:
+            reasons.append("body_similarity_high")
+            score -= 15
+
+    baseline_title = _normalize_text(baseline.body_title or _extract_title(baseline.body_sample))
+    current_title = _extract_title(body_sample)
+    if current_title and current_title != baseline_title:
+        reasons.append("title_changed")
+        score += 15
+
+    baseline_location = _normalize_text(baseline.response_headers.get("location", ""))
+    current_location = _normalize_text(result.response_headers.get("location", ""))
+    if current_location and current_location != baseline_location:
+        reasons.append("location_changed")
+        score += 15
+
+    baseline_ct = _normalize_text(baseline.content_type or baseline.response_headers.get("content-type", ""))
+    current_ct = _normalize_text(result.response_headers.get("content-type", ""))
+    if current_ct and current_ct != baseline_ct:
+        reasons.append("content_type_changed")
+        score += 10
 
     # Calibracion: cuando el target tiene un status dominante de bloqueo, premiar salida de ese estado.
     dom_status = baseline.calibration.get("dominant_status")
@@ -79,11 +128,14 @@ def analyze_result(
         result.status_code == baseline.status_code
         and "length_changed" not in reasons
         and "soft_403_marker" in reasons
+        and "title_changed" not in reasons
+        and "location_changed" not in reasons
+        and "content_type_changed" not in reasons
     ):
         return AnalysisResult(False, "none", reasons, score=0)
 
     # Si solo hay marcador de soft-403 y no hay cambios duros, no interesa.
-    hard_signals = [r for r in reasons if r not in {"soft_403_marker"}]
+    hard_signals = [r for r in reasons if r not in {"soft_403_marker", "body_similarity_high"}]
     if not hard_signals:
         return AnalysisResult(False, "none", [], score=0)
 
