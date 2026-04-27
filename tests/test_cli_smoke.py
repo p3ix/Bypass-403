@@ -48,7 +48,7 @@ def test_domain_batch_help_works() -> None:
     assert "--full" in result.stdout
 
 
-def test_probe_blocks_private_ip_by_default() -> None:
-    result = runner.invoke(app, ["probe", "http://127.0.0.1/admin"])
+def test_probe_blocks_private_ip_when_flag_enabled() -> None:
+    result = runner.invoke(app, ["probe", "http://127.0.0.1/admin", "--deny-private-ip"])
     assert result.exit_code == 2
     assert "private_host_blocked" in result.stdout

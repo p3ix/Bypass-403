@@ -1,0 +1,109 @@
+method,url,status_code,body_length,final_url,error,target_type,family,www_authenticate,path_payload,header_payload,method_payload,query_payload,protocol_payload,host_payload,smuggling_payload,interesting,confidence,score,reasons
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-For: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Real-IP: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Originating-IP: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),True-Client-IP: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),Client-IP: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Client-IP: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),CF-Connecting-IP: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Custom-IP-Authorization: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Custom-IP-Authorization: base64 127.0.0.1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),Forwarded: for=,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),Forwarded-For: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Remote-IP: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Remote-Addr: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-ProxyUser-Ip: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),Cluster-Client-IP: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-Host: loopback,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Host: origen,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,404,21,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),Host: localhost,,,,,,True,high,145,status_changed|length_changed|body_sample_changed|body_similarity_low|content_type_changed|deviates_from_calibration_status
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-Server: self,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Original-URL: path (proxy),,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Rewrite-URL: path,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Override-URL: path,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),Referer: same host,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-Proto: https,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-Proto: http,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-Port: 443,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-Port: 80,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Port: 443,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Port: 80,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),Origin: same host,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),User-Agent: Googlebot,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-AppEngine-Trusted-IP-Request: 1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-Scheme: https,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Original-Method: GET,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),x-middleware-subrequest,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),Destination: same path,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-For: 127.0.0.1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-For chained: 127.0.0.1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-For: ::1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-For chained: ::1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Real-IP: ::1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-For: 10.0.0.1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-For chained: 10.0.0.1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Real-IP: 10.0.0.1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-For: 192.168.0.1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Forwarded-For chained: 192.168.0.1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,Ruta original (baseline),X-Real-IP: 192.168.0.1,,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/,403,146,https://flipper-admin.k8s.dm.gg/,,path,,,,,,Query original,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/?debug=1,403,146,https://flipper-admin.k8s.dm.gg/?debug=1,,path,,,,,,Parametro debug=1,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/?admin=true,403,146,https://flipper-admin.k8s.dm.gg/?admin=true,,path,,,,,,Parametro admin=true,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/?role=admin,403,146,https://flipper-admin.k8s.dm.gg/?role=admin,,path,,,,,,Parametro role=admin,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/?role=user&role=admin,403,146,https://flipper-admin.k8s.dm.gg/?role=user&role=admin,,path,,,,,,Parameter pollution role=user&role=admin,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/?id=1&id=2,403,146,https://flipper-admin.k8s.dm.gg/?id=1&id=2,,path,,,,,,Parameter pollution id duplicado,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/?file=admin%00,403,146,https://flipper-admin.k8s.dm.gg/?file=admin%00,,path,,,,,,Null byte en parametro file,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg/?path=%EF%BC%8Fadmin,403,146,https://flipper-admin.k8s.dm.gg/?path=%EF%BC%8Fadmin,,path,,,,,,Slash unicode fullwidth en query,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,GET baseline method,,,,,False,none,0,soft_403_marker|body_similarity_high
+HEAD,https://flipper-admin.k8s.dm.gg,403,0,https://flipper-admin.k8s.dm.gg,,path,,,,,HEAD method,,,,,False,none,0,
+OPTIONS,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,OPTIONS method,,,,,False,none,0,soft_403_marker|body_similarity_high
+POST,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,POST method,,,,,False,none,0,soft_403_marker|body_similarity_high
+PUT,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,PUT method,,,,,False,none,0,soft_403_marker|body_similarity_high
+PATCH,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,PATCH method,,,,,False,none,0,soft_403_marker|body_similarity_high
+DELETE,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,DELETE method,,,,,False,none,0,soft_403_marker|body_similarity_high
+PROPFIND,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,PROPFIND method,,,,,False,none,0,soft_403_marker|body_similarity_high
+TRACE,https://flipper-admin.k8s.dm.gg,405,150,https://flipper-admin.k8s.dm.gg,,path,,,,,TRACE method,,,,,False,none,0,
+pOsT,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,pOsT mixed-case method,,,,,False,none,0,soft_403_marker|body_similarity_high
+POST,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,POST + X-HTTP-Method-Override: GET,,,,,False,none,0,soft_403_marker|body_similarity_high
+POST,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,POST + X-HTTP-Method-Override: PUT,,,,,False,none,0,soft_403_marker|body_similarity_high
+POST,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,POST + X-Method-Override: GET,,,,,False,none,0,soft_403_marker|body_similarity_high
+POST,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,POST + X-HTTP-Method: DELETE,,,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,,,HTTP/1.0 transport,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,,,HTTP/1.1 transport,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,,,,,,,HTTP/2 transport,,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Host: flipper-admin.k8s.dm.gg,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,X-Forwarded-Host: flipper-admin.k8s.dm.gg,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,X-Host: flipper-admin.k8s.dm.gg,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Forwarded host=flipper-admin.k8s.dm.gg,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,-1,0,https://flipper-admin.k8s.dm.gg,Illegal header name b':authority',path,vhost,,,,,,,:authority: flipper-admin.k8s.dm.gg,,False,none,0,request_error
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Host + X-Forwarded-Host: flipper-admin.k8s.dm.gg,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,404,21,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Host: localhost,,True,high,145,status_changed|length_changed|body_sample_changed|body_similarity_low|content_type_changed|deviates_from_calibration_status
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,X-Forwarded-Host: localhost,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,X-Host: localhost,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Forwarded host=localhost,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,-1,0,https://flipper-admin.k8s.dm.gg,Illegal header name b':authority',path,vhost,,,,,,,:authority: localhost,,False,none,0,request_error
+GET,https://flipper-admin.k8s.dm.gg,404,21,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Host + X-Forwarded-Host: localhost,,True,high,145,status_changed|length_changed|body_sample_changed|body_similarity_low|content_type_changed|deviates_from_calibration_status
+GET,https://flipper-admin.k8s.dm.gg,404,21,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Host: 127.0.0.1,,True,high,145,status_changed|length_changed|body_sample_changed|body_similarity_low|content_type_changed|deviates_from_calibration_status
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,X-Forwarded-Host: 127.0.0.1,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,X-Host: 127.0.0.1,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Forwarded host=127.0.0.1,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,-1,0,https://flipper-admin.k8s.dm.gg,Illegal header name b':authority',path,vhost,,,,,,,:authority: 127.0.0.1,,False,none,0,request_error
+GET,https://flipper-admin.k8s.dm.gg,404,21,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Host + X-Forwarded-Host: 127.0.0.1,,True,high,145,status_changed|length_changed|body_sample_changed|body_similarity_low|content_type_changed|deviates_from_calibration_status
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Host: flipper-admin.k8s.dm.gg:443,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,X-Forwarded-Host: flipper-admin.k8s.dm.gg:443,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,X-Host: flipper-admin.k8s.dm.gg:443,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Forwarded host=flipper-admin.k8s.dm.gg:443,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,-1,0,https://flipper-admin.k8s.dm.gg,Illegal header name b':authority',path,vhost,,,,,,,:authority: flipper-admin.k8s.dm.gg:443,,False,none,0,request_error
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Host + X-Forwarded-Host: flipper-admin.k8s.dm.gg:443,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Host: flipper-admin.k8s.dm.gg:8443,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,X-Forwarded-Host: flipper-admin.k8s.dm.gg:8443,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,X-Host: flipper-admin.k8s.dm.gg:8443,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Forwarded host=flipper-admin.k8s.dm.gg:8443,,False,none,0,soft_403_marker|body_similarity_high
+GET,https://flipper-admin.k8s.dm.gg,-1,0,https://flipper-admin.k8s.dm.gg,Illegal header name b':authority',path,vhost,,,,,,,:authority: flipper-admin.k8s.dm.gg:8443,,False,none,0,request_error
+GET,https://flipper-admin.k8s.dm.gg,403,146,https://flipper-admin.k8s.dm.gg,,path,vhost,,,,,,,Host + X-Forwarded-Host: flipper-admin.k8s.dm.gg:8443,,False,none,0,soft_403_marker|body_similarity_high
+POST,https://flipper-admin.k8s.dm.gg,400,150,https://flipper-admin.k8s.dm.gg,,path,smuggling,,,,,,,,CL+TE baseline conflict,True,high,105,status_changed|body_sample_changed|title_changed|deviates_from_calibration_status|smuggling_suspected
+POST,https://flipper-admin.k8s.dm.gg,400,150,https://flipper-admin.k8s.dm.gg,,path,smuggling,,,,,,,,CL+TE with keep-alive,True,high,105,status_changed|body_sample_changed|title_changed|deviates_from_calibration_status|smuggling_suspected
+POST,https://flipper-admin.k8s.dm.gg,-1,0,https://flipper-admin.k8s.dm.gg,Illegal header value b' chunked',path,smuggling,,,,,,,,TE obfuscation leading space,False,none,0,request_error
+POST,https://flipper-admin.k8s.dm.gg,-1,0,https://flipper-admin.k8s.dm.gg,conflicting Content-Length headers,path,smuggling,,,,,,,,Duplicated CL comma style,False,none,0,request_error
+POST,https://flipper-admin.k8s.dm.gg,400,150,https://flipper-admin.k8s.dm.gg,,path,smuggling,,,,,,,,X-Transfer-Encoding confusion,True,high,105,status_changed|body_sample_changed|title_changed|deviates_from_calibration_status|smuggling_suspected

@@ -538,7 +538,7 @@ def probe(
     deny_private_ip: Annotated[
         bool,
         typer.Option("--deny-private-ip/--allow-private-ip", help="Bloquear IPs privadas/localhost"),
-    ] = True,
+    ] = False,
     allow_cross_host_redirects: Annotated[
         bool,
         typer.Option(
@@ -740,7 +740,7 @@ def domain_probe(
     output_csv: Annotated[str | None, typer.Option("--csv")] = None,
     scope_host: Annotated[list[str] | None, typer.Option("--scope-host")] = None,
     scope_suffix: Annotated[list[str] | None, typer.Option("--scope-suffix")] = None,
-    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = True,
+    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = False,
     allow_cross_host_redirects: Annotated[
         bool,
         typer.Option("--allow-cross-host-redirects/--same-host-redirects"),
@@ -846,7 +846,7 @@ def domain_batch(
     all_results: Annotated[bool, typer.Option("--all")] = False,
     scope_host: Annotated[list[str] | None, typer.Option("--scope-host")] = None,
     scope_suffix: Annotated[list[str] | None, typer.Option("--scope-suffix")] = None,
-    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = True,
+    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = False,
     allow_cross_host_redirects: Annotated[
         bool,
         typer.Option("--allow-cross-host-redirects/--same-host-redirects"),
@@ -937,7 +937,7 @@ def batch(
     smuggling_limit: Annotated[int, typer.Option("--smuggling-limit")] = 20,
     scope_host: Annotated[list[str] | None, typer.Option("--scope-host")] = None,
     scope_suffix: Annotated[list[str] | None, typer.Option("--scope-suffix")] = None,
-    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = True,
+    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = False,
     allow_cross_host_redirects: Annotated[
         bool,
         typer.Option("--allow-cross-host-redirects/--same-host-redirects"),
@@ -1030,7 +1030,7 @@ def replay(
     header_limit: Annotated[int, typer.Option("--header-limit", help="Cuantos header payloads probar por hallazgo")] = 6,
     scope_host: Annotated[list[str] | None, typer.Option("--scope-host")] = None,
     scope_suffix: Annotated[list[str] | None, typer.Option("--scope-suffix")] = None,
-    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = True,
+    deny_private_ip: Annotated[bool, typer.Option("--deny-private-ip/--allow-private-ip")] = False,
     allow_cross_host_redirects: Annotated[
         bool,
         typer.Option("--allow-cross-host-redirects/--same-host-redirects"),
