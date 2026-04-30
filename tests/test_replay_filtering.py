@@ -29,16 +29,7 @@ def test_replay_filters_by_confidence(tmp_path: Path) -> None:
     fp.write_text(json.dumps(sample), encoding="utf-8")
     result = runner.invoke(
         app,
-        [
-            "replay",
-            str(fp),
-            "--min-confidence",
-            "high",
-            "--max-targets",
-            "1",
-            "--no-replay-methods",
-            "--no-replay-headers",
-        ],
+        ["replay", str(fp), "--min-confidence", "high", "--max-targets", "1"],
     )
     assert result.exit_code == 0
-    assert "Replay hallazgos filtrados: 1" in result.stdout
+    assert "1 findings" in result.stdout

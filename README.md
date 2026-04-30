@@ -1,28 +1,8 @@
-# Bypass Tool (403 Bypass Toolkit)
+# Bypass
 
-Herramienta CLI en Python para pruebas de bypass de controles de acceso (403/40X) en entornos autorizados de DevSec y Bug Bounty.
+403/401 bypass toolkit for bug bounty. One command, all techniques, aggressive by default.
 
-Incluye pruebas de:
-
-- mutaciones de ruta
-- cabeceras de proxy/IP
-- verbos y method override
-- query/pollution
-- protocolos (`HTTP/1.0`, `HTTP/1.1`, `HTTP/2`)
-- fuzzing Host/SNI/authority
-- checks de smuggling-lite diferenciales
-
-## Aviso legal
-
-Usa esta herramienta solo contra activos donde tengas permiso explícito.  
-No la uses fuera de alcance o contra terceros sin autorización.
-
-## Requisitos
-
-- Python `>= 3.10`
-- Linux/macOS/WSL recomendado
-
-## Instalación
+## Install
 
 ```bash
 cd ~/Bypass
@@ -31,168 +11,91 @@ python3 -m venv .venv
 pip install -e .
 ```
 
-Comprobar ayuda:
+## Usage
 
 ```bash
-python -m bypass --help
-python -m bypass probe --help
+# Basic - runs ALL techniques against the target
+bypass https://target.tld/admin
+
+# Self-signed TLS (lab/internal)
+bypass https://192.168.0.18:8443/admin -k
+
+# Export results
+bypass https://target.tld/admin -k --json results.json --csv results.csv
+
+# Add custom hosts for Host/SNI fuzzing
+bypass https://target.tld/admin -k --host internal.target.tld --host localhost
+
+# Rate limit (requests per second)
+bypass https://target.tld/admin --rate 10
+
+# Quiet mode (only Top bypasses table + curl)
+bypass https://target.tld/admin -k -q
+
+# Follow redirects
+bypass https://target.tld/admin -k -L
+
+# Custom methods
+bypass https://target.tld/admin -k --method POST --method PUT
 ```
 
-## Comandos principales
+## What it does
 
-- `probe`: lanza pruebas contra un target
-- `batch`: ejecuta sobre lista de URLs
-- `replay`: reintenta hallazgos exportados
-- `list`: muestra tamaño de catálogos cargados
+Automatically runs all of these against your target:
 
-## Modos de escaneo (`--mode`)
+- Path mutations (traversal, encoding, null bytes, case tricks, IIS tricks, etc.)
+- Header injection (X-Forwarded-For, X-Original-URL, X-Rewrite-URL, etc.)
+- Method tampering (verb override, TRACE, non-standard methods)
+- Query pollution and encoding tricks
+- Protocol switching (HTTP/1.0, HTTP/1.1, HTTP/2)
+- Host/SNI fuzzing (X-Forwarded-Host, :authority, custom hosts)
+- Smuggling-lite differential probes (CL/TE conflicts)
+- Auth challenge probes (Basic, Bearer, NTLM, Negotiate)
+- Guided combos (high-yield path + IP headers, method override + encoded paths)
 
-- `path`: mutaciones de ruta
-- `headers`: payloads de cabeceras
-- `both`: path + headers + query
-- `methods`: verb tampering y overrides
-- `query`: mutaciones de query
-- `protocol`: `HTTP/1.0`, `HTTP/1.1`, `HTTP/2`
-- `host`: fuzzing Host/SNI/authority
-- `smuggling`: probes smuggling-lite
-- `all`: ejecuta todo en una pasada (sin deduplicar)
+Default bypass IPs injected: `127.0.0.1`, `::1`, `10.0.0.1`, `192.168.0.1`, `0.0.0.0`
 
-## Flags más importantes
+## Options
 
-- `--profile safe|aggressive`: intensidad del motor
-- `--combine`: combina path+headers (costoso)
-- `--guided-combos`: combinaciones guiadas de técnicas
-- `--host-fuzz`: activa fuzzing extendido Host/SNI
-- `--host-fuzz-value <host>`: valor extra host/authority (repetible)
-- `--smuggling-lite`: activa probes smuggling-lite
-- `--smuggling-limit N`: máximo probes smuggling por target
-- `--bypass-ip <ip>`: IP/host extra para payloads tipo XFF (repetible)
-- `--calibrate --calibration-samples N`: calibración dinámica baseline
-- `--all`: mostrar todas las filas (no solo interesantes)
-- `-k`: desactivar validación TLS (cert autofirmado/lab)
-- `-L`: seguir redirecciones
-- `--json out.json` / `--csv out.csv`: exportes
+| Flag | Description |
+|------|-------------|
+| `-k` | Skip TLS verification |
+| `-L` | Follow redirects |
+| `-q` | Quiet: only show Top bypasses |
+| `--timeout N` | Request timeout in seconds (default: 15) |
+| `--method M` | HTTP method (repeatable) |
+| `--bypass-ip IP` | Extra IP for XFF payloads (repeatable) |
+| `--host H` | Extra host for Host/SNI fuzzing (repeatable) |
+| `--json FILE` | Export to JSON |
+| `--csv FILE` | Export to CSV |
+| `--all` | Show all results (not just interesting) |
+| `--rate N` | Max requests/second (0 = unlimited) |
+| `--top N` | Max entries in Top bypasses table (default: 10) |
 
-## Uso rápido
-
-### 1) Escaneo base
+## Batch mode
 
 ```bash
-python -m bypass probe "https://target.tld/admin" --mode both
+# Scan multiple targets from a file (one URL per line)
+bypass batch targets.txt -k --out-dir results/
 ```
 
-### 2) Target con TLS autofirmado
+## Replay findings
 
 ```bash
-python -m bypass probe "https://192.168.0.18:8443/host-manager/" --mode both -k
+# Re-test interesting findings from a previous scan
+bypass replay results.json -k --min-confidence medium
 ```
 
-### 3) Solo protocolos
+## Output
 
-```bash
-python -m bypass probe "https://target.tld/admin" --mode protocol -k --all
-```
+1. **Baseline** - reference status/size of the target
+2. **Top bypasses** - ranked table of most promising findings with confidence scores
+3. **Curl commands** - copy-paste ready reproduction commands
+4. **Full results table** - all attempts (with `--all` or if no interesting findings)
 
-### 4) Solo Host/SNI fuzzing
-
-```bash
-python -m bypass probe "https://target.tld/admin" \
-  --mode host \
-  --host-fuzz \
-  --host-fuzz-value internal.target.tld \
-  --host-fuzz-value localhost \
-  -k --all
-```
-
-### 5) Solo smuggling-lite
-
-```bash
-python -m bypass probe "https://target.tld/admin" \
-  --mode smuggling \
-  --smuggling-lite \
-  --smuggling-limit 30 \
-  -k --all
-```
-
-## Comando FULL agresivo (todo)
-
-```bash
-python -m bypass probe "https://target.tld/admin" \
-  --mode all \
-  --profile aggressive \
-  --combine \
-  --guided-combos \
-  --host-fuzz \
-  --host-fuzz-value localhost \
-  --host-fuzz-value 127.0.0.1 \
-  --smuggling-lite \
-  --smuggling-limit 40 \
-  --bypass-ip 127.0.0.1 \
-  --bypass-ip ::1 \
-  --bypass-ip 10.0.0.1 \
-  --bypass-ip 192.168.0.1 \
-  --all \
-  -k \
-  --calibrate \
-  --calibration-samples 5 \
-  --json out_full_aggressive.json \
-  --csv out_full_aggressive.csv
-```
-
-## Batch
-
-Archivo `targets.txt` (una URL por línea):
-
-```txt
-https://target1.tld/admin
-https://target2.tld/private
-```
-
-Ejecución:
-
-```bash
-python -m bypass batch targets.txt \
-  --mode all \
-  --profile aggressive \
-  --guided-combos \
-  --host-fuzz \
-  --smuggling-lite \
-  -k \
-  --out-dir out_batch_full
-```
-
-## Replay de hallazgos
-
-```bash
-python -m bypass replay out_full_aggressive.json \
-  --min-confidence medium \
-  --max-targets 50 \
-  --replay-methods \
-  --replay-headers \
-  --header-limit 8 \
-  -k
-```
-
-## Interpretación de resultados
-
-- **Baseline**: estado y tamaño de referencia del target.
-- **Tabla principal**: cada intento con payload usado y score.
-- **Resumen final**: tamaño normal vs diferencias por status.
-- **Outliers**: filas con tamaño o comportamiento diferente son candidatas para replay/manual triage.
-- **smuggling_suspected**: señal diferencial para investigar parsing proxy/backend.
-
-## Desarrollo
-
-Ejecutar tests:
+## Development
 
 ```bash
 . .venv/bin/activate
 python -m pytest -q
 ```
-
-Lints (si usas Ruff):
-
-```bash
-ruff check .
-```
-

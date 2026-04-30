@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from collections import Counter
-import http.client
 import hashlib
+import http.client
+import re
+import ssl
+from collections import Counter
+from dataclasses import dataclass
 from statistics import pstdev
 from typing import Callable
 from urllib.parse import urljoin, urlsplit, urlunsplit
-import ssl
-import re
 
 import httpx
 
@@ -24,7 +24,11 @@ from bypass.payloads.paths_403 import all_path_variants
 from bypass.payloads.protocols_403 import protocol_payloads
 from bypass.payloads.query_403 import query_mutations
 from bypass.payloads.smuggling_lite import smuggling_lite_payloads
-from bypass.safety import RequestThrottle, ScopePolicy, is_redirect_target_allowed, is_url_in_scope
+from bypass.safety import RequestThrottle
+
+DEFAULT_BYPASS_IPS = ["127.0.0.1", "::1", "10.0.0.1", "192.168.0.1", "0.0.0.0"]
+COMBINE_LIMIT = 5000
+LENGTH_DELTA = 40
 
 
 @dataclass
@@ -34,9 +38,7 @@ class RuntimeProfile:
     length_delta: int
 
 
-SAFE_PROFILE = RuntimeProfile(name="safe", combine_limit=500, length_delta=70)
-AGGRESSIVE_PROFILE = RuntimeProfile(name="aggressive", combine_limit=5000, length_delta=40)
-BaselineKey = tuple[str, str, str]
+AGGRESSIVE_PROFILE = RuntimeProfile(name="aggressive", combine_limit=COMBINE_LIMIT, length_delta=LENGTH_DELTA)
 
 
 def _extract_title(body_sample: str) -> str:
@@ -68,6 +70,9 @@ def _spec_family_name(spec: RequestSpec) -> str:
     return "general"
 
 
+BaselineKey = tuple[str, str, str]
+
+
 def _baseline_key_for_spec(spec: RequestSpec) -> BaselineKey:
     return (
         spec.method.upper(),
@@ -89,7 +94,6 @@ def compute_dynamic_length_delta(lengths: list[int], floor: int) -> int:
         return floor
     if len(lengths) == 1:
         return max(floor, 20)
-    # Delta dinamico: variabilidad observada + margen minimo.
     spread = int(pstdev(lengths) * 2) + 20
     return max(floor, spread)
 
@@ -116,8 +120,6 @@ def _calibrate_target(
     protocol_hint: str | None = None,
     timeout: float = 15.0,
     verify: bool = True,
-    proxy: str | None = None,
-    scope_policy: ScopePolicy | None = None,
     follow_redirects: bool = False,
     throttle: RequestThrottle | None = None,
 ) -> dict[str, object]:
@@ -125,38 +127,19 @@ def _calibrate_target(
     lengths: list[int] = []
     for url in _calibration_urls(target_url, samples):
         if protocol_hint == "http2":
-            with make_client(timeout, verify, False, proxy, http2=True) as pclient:
+            with make_client(timeout, verify, False, http2=True) as pclient:
                 st, ln, _, _, _, err = _fetch(
-                    pclient,
-                    method,
-                    url,
-                    headers,
-                    body,
-                    scope_policy=scope_policy,
-                    follow_redirects=follow_redirects,
-                    throttle=throttle,
+                    pclient, method, url, headers, body,
+                    follow_redirects=follow_redirects, throttle=throttle,
                 )
         elif protocol_hint == "http1_0":
             st, ln, _, _, _, err = _fetch_http10(
-                method,
-                url,
-                headers,
-                timeout=timeout,
-                verify=verify,
-                body=body,
-                scope_policy=scope_policy,
-                throttle=throttle,
+                method, url, headers, timeout=timeout, verify=verify, body=body, throttle=throttle,
             )
         else:
             st, ln, _, _, _, err = _fetch(
-                client,
-                method,
-                url,
-                headers,
-                body,
-                scope_policy=scope_policy,
-                follow_redirects=follow_redirects,
-                throttle=throttle,
+                client, method, url, headers, body,
+                follow_redirects=follow_redirects, throttle=throttle,
             )
         if err:
             continue
@@ -181,7 +164,6 @@ def _fetch(
     url: str,
     headers: dict[str, str] | None,
     body: bytes | None = None,
-    scope_policy: ScopePolicy | None = None,
     follow_redirects: bool = False,
     throttle: RequestThrottle | None = None,
     max_redirects: int = 5,
@@ -193,10 +175,6 @@ def _fetch(
         active_body = body
         max_hops = max_redirects if follow_redirects else 0
         for redirect_hop in range(max_hops + 1):
-            if scope_policy is not None:
-                allowed, reason = is_url_in_scope(active_url, scope_policy)
-                if not allowed:
-                    return -1, 0, active_url, "", {}, reason
             if throttle is not None:
                 throttle.before_request()
             request = client.build_request(active_method, active_url, headers=h, content=active_body)
@@ -211,10 +189,6 @@ def _fetch(
             if not location:
                 break
             next_url = str(urljoin(str(r.url), location))
-            if scope_policy is not None:
-                allowed, reason = is_redirect_target_allowed(active_url, next_url, scope_policy)
-                if not allowed:
-                    return -1, 0, next_url, "", {}, reason
             if r.status_code in {301, 302, 303} and active_method.upper() not in {"GET", "HEAD"}:
                 active_method = "GET"
                 active_body = None
@@ -240,17 +214,12 @@ def _fetch_http10(
     timeout: float,
     verify: bool,
     body: bytes | None = None,
-    scope_policy: ScopePolicy | None = None,
     throttle: RequestThrottle | None = None,
 ) -> tuple[int, int, str, str, dict[str, str], str | None]:
     try:
         u = urlsplit(url)
         if not u.scheme or not u.netloc:
             return -1, 0, url, "", {}, "invalid_url"
-        if scope_policy is not None:
-            allowed, reason = is_url_in_scope(url, scope_policy)
-            if not allowed:
-                return -1, 0, url, "", {}, reason
         path_q = u.path or "/"
         if u.query:
             path_q = f"{path_q}?{u.query}"
@@ -290,26 +259,21 @@ def _fetch_http10(
 def _build_specs(
     target_url: str,
     *,
-    mode: str,
-    combine: bool,
     methods: list[str],
-    profile: RuntimeProfile,
     bypass_ips: list[str] | None = None,
-    guided_combos: bool = False,
-    enable_host_fuzz: bool = False,
     host_fuzz_values: list[str] | None = None,
-    enable_smuggling_lite: bool = False,
-    smuggling_limit: int = 20,
+    smuggling_limit: int = 40,
     domain_mode: bool = False,
-    auth_challenges: bool = False,
-    max_vhost_payloads: int = 30,
+    max_vhost_payloads: int = 40,
 ) -> list[RequestSpec]:
     u = urlsplit(target_url)
     host = u.netloc.split("@")[-1].split(":")[0] if u.netloc else ""
     base_path = u.path or "/"
     scheme = u.scheme or "https"
+
+    ips = bypass_ips if bypass_ips else DEFAULT_BYPASS_IPS
     path_variants = all_path_variants(target_url)
-    header_sets = default_header_sets(base_path, host, scheme, bypass_ips=bypass_ips)
+    header_sets = default_header_sets(base_path, host, scheme, bypass_ips=ips)
     method_sets = method_payloads()
     proto_sets = protocol_payloads()
     query_sets = query_mutations(target_url)
@@ -318,9 +282,8 @@ def _build_specs(
         host_sets = host_sets[: max(1, max_vhost_payloads)]
     smuggle_sets = smuggling_lite_payloads()
     domain_sets = domain_header_payloads(host or "localhost") if domain_mode else []
-    auth_sets = auth_challenge_payloads() if auth_challenges else []
+    auth_sets = auth_challenge_payloads()
     specs: list[RequestSpec] = []
-    guided_added = 0
 
     def _url_with_path_override(path_override: str) -> str:
         p = path_override if path_override.startswith("/") else f"/{path_override}"
@@ -335,189 +298,104 @@ def _build_specs(
     ) -> None:
         specs.append(
             RequestSpec(
-                method=method,
-                url=url,
-                headers=hdrs,
-                path_payload=path_p,
-                header_payload=header_p,
-                method_payload=None,
+                method=method, url=url, headers=hdrs,
+                path_payload=path_p, header_payload=header_p,
             )
         )
 
-    requested_mode = mode
-    modes_to_run = [mode]
-    if requested_mode == "all":
-        modes_to_run = ["both", "methods", "protocol", "host", "smuggling"]
-
     for m in methods:
-        for active_mode in modes_to_run:
-            if active_mode == "path":
-                if combine:
-                    for pv in path_variants:
-                        for hdr_dict, hp in header_sets:
-                            add(m, pv.full_url, hdr_dict, pv.payload, hp)
-                else:
-                    for pv in path_variants:
-                        add(m, pv.full_url, {}, pv.payload, None)
+        # Path + Header combos
+        for pv in path_variants:
+            for hdr_dict, hp in header_sets:
+                add(m, pv.full_url, hdr_dict, pv.payload, hp)
 
-            elif active_mode == "headers":
-                for hdr_dict, hp in header_sets:
-                    request_url = target_url
-                    override_path = hp.metadata.get("request_path_override")
-                    if isinstance(override_path, str) and override_path:
-                        request_url = _url_with_path_override(override_path)
-                    add(m, request_url, hdr_dict, None, hp)
-                if domain_mode:
-                    for hdrs, hp in domain_sets:
-                        specs.append(
-                            RequestSpec(
-                                method=m,
-                                url=target_url,
-                                headers=hdrs,
-                                header_payload=hp,
-                                family=str(hp.metadata.get("family", "redirect")),
-                                target_type="domain",
-                            )
-                        )
+        # Headers alone (with path overrides)
+        for hdr_dict, hp in header_sets:
+            request_url = target_url
+            override_path = hp.metadata.get("request_path_override")
+            if isinstance(override_path, str) and override_path:
+                request_url = _url_with_path_override(override_path)
+            add(m, request_url, hdr_dict, None, hp)
 
-            elif active_mode == "both":
-                if combine:
-                    for pv in path_variants:
-                        for hdr_dict, hp in header_sets:
-                            add(m, pv.full_url, hdr_dict, pv.payload, hp)
-                else:
-                    for pv in path_variants:
-                        add(m, pv.full_url, {}, pv.payload, None)
-                    for hdr_dict, hp in header_sets:
-                        request_url = target_url
-                        override_path = hp.metadata.get("request_path_override")
-                        if isinstance(override_path, str) and override_path:
-                            request_url = _url_with_path_override(override_path)
-                        add(m, request_url, hdr_dict, None, hp)
+        # Domain headers
+        if domain_mode:
+            for hdrs, hp in domain_sets:
+                specs.append(RequestSpec(
+                    method=m, url=target_url, headers=hdrs,
+                    header_payload=hp, family=str(hp.metadata.get("family", "redirect")),
+                    target_type="domain",
+                ))
 
-            elif active_mode == "methods":
-                for method_name, hdrs, mp in method_sets:
-                    specs.append(
-                        RequestSpec(
-                            method=method_name,
-                            url=target_url,
-                            headers=hdrs,
-                            path_payload=None,
-                            header_payload=None,
-                            method_payload=mp,
-                            body=b"{}" if method_name in {"POST", "PUT", "PATCH"} else None,
-                        )
-                    )
+        # Methods
+        for method_name, hdrs, mp in method_sets:
+            specs.append(RequestSpec(
+                method=method_name, url=target_url, headers=hdrs,
+                method_payload=mp,
+                body=b"{}" if method_name in {"POST", "PUT", "PATCH"} else None,
+            ))
 
-            elif active_mode == "query":
-                for q_url, qp in query_sets:
-                    specs.append(
-                        RequestSpec(
-                            method=m,
-                            url=q_url,
-                            headers={},
-                            query_payload=qp,
-                        )
-                    )
-            elif active_mode == "protocol":
-                for proto_hint, pp in proto_sets:
-                    specs.append(
-                        RequestSpec(
-                            method=m,
-                            url=target_url,
-                            headers={},
-                            protocol_payload=pp,
-                            protocol_hint=proto_hint,
-                        )
-                    )
-            elif active_mode == "host" and (enable_host_fuzz or requested_mode in {"host", "all"}):
-                for hdrs, hp in host_sets:
-                    specs.append(
-                        RequestSpec(
-                            method=m,
-                            url=target_url,
-                            headers=hdrs,
-                            host_payload=hp,
-                            family=str(hp.metadata.get("family", "vhost")),
-                            target_type="domain" if domain_mode else "path",
-                        )
-                    )
-            elif active_mode == "smuggling" and (enable_smuggling_lite or requested_mode in {"smuggling", "all"}):
-                for hdrs, body, sp in smuggle_sets[: max(1, smuggling_limit)]:
-                    specs.append(
-                        RequestSpec(
-                            method="POST",
-                            url=target_url,
-                            headers=hdrs,
-                            body=body,
-                            smuggling_payload=sp,
-                            family="smuggling",
-                            target_type="domain" if domain_mode else "path",
-                        )
-                    )
+        # Query mutations
+        for q_url, qp in query_sets:
+            specs.append(RequestSpec(method=m, url=q_url, headers={}, query_payload=qp))
 
-            if active_mode == "both":
-                for q_url, qp in query_sets:
-                    specs.append(
-                        RequestSpec(
-                            method=m,
-                            url=q_url,
-                            headers={},
-                            query_payload=qp,
-                            target_type="domain" if domain_mode else "path",
-                        )
-                    )
-                if guided_combos:
-                    # 1) path high-yield + header local-ip
-                    key_paths = [pv for pv in path_variants if pv.payload.id in {"midpath_iis", "encoded_slash_mid", "double_encoded_traversal"}]
-                    key_headers = [x for x in header_sets if x[1].id in {"h_x_forwarded_for", "h_x_real_ip", "h_x_orig_url_on_root", "h_x_rewrite_url_on_root"}]
-                    for pv in key_paths[:3]:
-                        for hdr_dict, hp in key_headers[:4]:
-                            specs.append(
-                                RequestSpec(
-                                    method=m,
-                                    url=pv.full_url,
-                                    headers=hdr_dict,
-                                    path_payload=pv.payload,
-                                    header_payload=hp,
-                                )
-                            )
-                            guided_added += 1
-                    # 2) method-override + path encoded
-                    encoded_paths = [pv for pv in path_variants if "encode" in pv.payload.id or "nullbyte" in pv.payload.id]
-                    override_methods = [mm for mm in method_sets if "override" in mm[2].id]
-                    for pv in encoded_paths[:2]:
-                        for method_name, mhdrs, mp in override_methods[:3]:
-                            specs.append(
-                                RequestSpec(
-                                    method=method_name,
-                                    url=pv.full_url,
-                                    headers=mhdrs,
-                                    path_payload=pv.payload,
-                                    method_payload=mp,
-                                    body=b"{}" if method_name.upper() in {"POST", "PUT", "PATCH"} else None,
-                                )
-                            )
-                            guided_added += 1
+        # Protocol variants
+        for proto_hint, pp in proto_sets:
+            specs.append(RequestSpec(
+                method=m, url=target_url, headers={},
+                protocol_payload=pp, protocol_hint=proto_hint,
+            ))
 
-    combo_limit = 40 if profile.name == "safe" else 120
-    if auth_challenges:
-        for m in methods:
-            for hdrs, ap in auth_sets:
-                specs.append(
-                    RequestSpec(
-                        method=m,
-                        url=target_url,
-                        headers=hdrs,
-                        header_payload=ap,
-                        family="auth-challenge",
-                        target_type="domain" if domain_mode else "path",
-                    )
-                )
-    if guided_combos and guided_added > combo_limit:
-        specs = specs[: profile.combine_limit + combo_limit]
-    if len(specs) > profile.combine_limit:
-        specs = specs[: profile.combine_limit]
+        # Host/SNI fuzzing
+        for hdrs, hp in host_sets:
+            specs.append(RequestSpec(
+                method=m, url=target_url, headers=hdrs,
+                host_payload=hp, family=str(hp.metadata.get("family", "vhost")),
+                target_type="domain" if domain_mode else "path",
+            ))
+
+        # Smuggling
+        for hdrs, body, sp in smuggle_sets[: max(1, smuggling_limit)]:
+            specs.append(RequestSpec(
+                method="POST", url=target_url, headers=hdrs,
+                body=body, smuggling_payload=sp, family="smuggling",
+                target_type="domain" if domain_mode else "path",
+            ))
+
+        # Auth challenges
+        for hdrs, ap in auth_sets:
+            specs.append(RequestSpec(
+                method=m, url=target_url, headers=hdrs,
+                header_payload=ap, family="auth-challenge",
+                target_type="domain" if domain_mode else "path",
+            ))
+
+        # Guided combos: high-yield path + local-ip headers
+        key_paths = [pv for pv in path_variants if pv.payload.id in {
+            "midpath_iis", "encoded_slash_mid", "double_encoded_traversal",
+        }]
+        key_headers = [x for x in header_sets if x[1].id in {
+            "h_x_forwarded_for", "h_x_real_ip", "h_x_orig_url_on_root", "h_x_rewrite_url_on_root",
+        }]
+        for pv in key_paths[:3]:
+            for hdr_dict, hp in key_headers[:4]:
+                specs.append(RequestSpec(
+                    method=m, url=pv.full_url, headers=hdr_dict,
+                    path_payload=pv.payload, header_payload=hp,
+                ))
+
+        # Guided combos: method-override + encoded paths
+        encoded_paths = [pv for pv in path_variants if "encode" in pv.payload.id or "nullbyte" in pv.payload.id]
+        override_methods = [mm for mm in method_sets if "override" in mm[2].id]
+        for pv in encoded_paths[:2]:
+            for method_name, mhdrs, mp in override_methods[:3]:
+                specs.append(RequestSpec(
+                    method=method_name, url=pv.full_url, headers=mhdrs,
+                    path_payload=pv.payload, method_payload=mp,
+                    body=b"{}" if method_name.upper() in {"POST", "PUT", "PATCH"} else None,
+                ))
+
+    if len(specs) > COMBINE_LIMIT:
+        specs = specs[:COMBINE_LIMIT]
     return _dedupe_specs(specs)
 
 
@@ -555,108 +433,47 @@ def _fetch_baseline_snapshot(
     timeout: float,
     verify: bool,
     follow_redirects: bool,
-    proxy: str | None,
     profile: RuntimeProfile,
-    auto_calibrate: bool,
     calibration_samples: int,
     protocol_hint: str | None,
-    scope_policy: ScopePolicy | None,
     throttle: RequestThrottle,
 ) -> BaselineSnapshot:
     body = _baseline_body_for_method(method)
     if protocol_hint == "http2":
-        with make_client(timeout, verify, False, proxy, http2=True) as pclient:
+        with make_client(timeout, verify, False, http2=True) as pclient:
             st, ln, _, baseline_sample, baseline_resp_headers, err = _fetch(
-                pclient,
-                method,
-                target_url,
-                headers,
-                body,
-                scope_policy=scope_policy,
-                follow_redirects=follow_redirects,
-                throttle=throttle,
+                pclient, method, target_url, headers, body,
+                follow_redirects=follow_redirects, throttle=throttle,
             )
-            calibration = (
-                _calibrate_target(
-                    pclient,
-                    target_url,
-                    headers,
-                    samples=max(1, calibration_samples),
-                    floor_delta=profile.length_delta,
-                    method=method,
-                    body=body,
-                    protocol_hint=protocol_hint,
-                    timeout=timeout,
-                    verify=verify,
-                    proxy=proxy,
-                    scope_policy=scope_policy,
-                    follow_redirects=follow_redirects,
-                    throttle=throttle,
-                )
-                if auto_calibrate
-                else {"enabled": False, "samples_ok": 0, "length_delta": profile.length_delta}
+            calibration = _calibrate_target(
+                pclient, target_url, headers,
+                samples=max(1, calibration_samples), floor_delta=profile.length_delta,
+                method=method, body=body, protocol_hint=protocol_hint,
+                timeout=timeout, verify=verify,
+                follow_redirects=follow_redirects, throttle=throttle,
             )
     elif protocol_hint == "http1_0":
         st, ln, _, baseline_sample, baseline_resp_headers, err = _fetch_http10(
-            method,
-            target_url,
-            headers,
-            timeout=timeout,
-            verify=verify,
-            body=body,
-            scope_policy=scope_policy,
-            throttle=throttle,
+            method, target_url, headers, timeout=timeout, verify=verify, body=body, throttle=throttle,
         )
-        calibration = (
-            _calibrate_target(
-                client,
-                target_url,
-                headers,
-                samples=max(1, calibration_samples),
-                floor_delta=profile.length_delta,
-                method=method,
-                body=body,
-                protocol_hint=protocol_hint,
-                timeout=timeout,
-                verify=verify,
-                proxy=proxy,
-                scope_policy=scope_policy,
-                follow_redirects=follow_redirects,
-                throttle=throttle,
-            )
-            if auto_calibrate
-            else {"enabled": False, "samples_ok": 0, "length_delta": profile.length_delta}
+        calibration = _calibrate_target(
+            client, target_url, headers,
+            samples=max(1, calibration_samples), floor_delta=profile.length_delta,
+            method=method, body=body, protocol_hint=protocol_hint,
+            timeout=timeout, verify=verify,
+            follow_redirects=follow_redirects, throttle=throttle,
         )
     else:
         st, ln, _, baseline_sample, baseline_resp_headers, err = _fetch(
-            client,
-            method,
-            target_url,
-            headers,
-            body,
-            scope_policy=scope_policy,
-            follow_redirects=follow_redirects,
-            throttle=throttle,
+            client, method, target_url, headers, body,
+            follow_redirects=follow_redirects, throttle=throttle,
         )
-        calibration = (
-            _calibrate_target(
-                client,
-                target_url,
-                headers,
-                samples=max(1, calibration_samples),
-                floor_delta=profile.length_delta,
-                method=method,
-                body=body,
-                protocol_hint=protocol_hint,
-                timeout=timeout,
-                verify=verify,
-                proxy=proxy,
-                scope_policy=scope_policy,
-                follow_redirects=follow_redirects,
-                throttle=throttle,
-            )
-            if auto_calibrate
-            else {"enabled": False, "samples_ok": 0, "length_delta": profile.length_delta}
+        calibration = _calibrate_target(
+            client, target_url, headers,
+            samples=max(1, calibration_samples), floor_delta=profile.length_delta,
+            method=method, body=body, protocol_hint=protocol_hint,
+            timeout=timeout, verify=verify,
+            follow_redirects=follow_redirects, throttle=throttle,
         )
     if err:
         st, ln = -1, 0
@@ -674,49 +491,30 @@ def _fetch_baseline_snapshot(
 def run_probe(
     target_url: str,
     *,
-    mode: str = "both",
-    combine: bool = False,
-    profile_name: str = "safe",
     methods: list[str] | None = None,
     timeout: float = 15.0,
     verify: bool = True,
     follow_redirects: bool = False,
-    proxy: str | None = None,
     extra_headers: dict[str, str] | None = None,
     bypass_ips: list[str] | None = None,
-    guided_combos: bool = False,
-    enable_host_fuzz: bool = False,
     host_fuzz_values: list[str] | None = None,
-    enable_smuggling_lite: bool = False,
-    smuggling_limit: int = 20,
+    smuggling_limit: int = 40,
     domain_mode: bool = False,
-    auth_challenges: bool = False,
-    max_vhost_payloads: int = 30,
-    auto_calibrate: bool = True,
-    calibration_samples: int = 3,
+    max_vhost_payloads: int = 40,
+    calibration_samples: int = 5,
     progress_callback: Callable[[int, int, TryResult, AnalysisResult], None] | None = None,
-    scope_policy: ScopePolicy | None = None,
     rate_limit: float = 0.0,
-    jitter_ms: int = 0,
-    backoff_ms: int = 1000,
 ) -> tuple[BaselineSnapshot, list[tuple[TryResult, AnalysisResult]]]:
-    profile = AGGRESSIVE_PROFILE if profile_name == "aggressive" else SAFE_PROFILE
+    profile = AGGRESSIVE_PROFILE
     methods = [x.upper() for x in (methods or ["GET"])]
     base_hdrs: dict[str, str] = dict(extra_headers or {})
     specs = _build_specs(
         target_url,
-        mode=mode,
-        combine=combine,
         methods=methods,
-        profile=profile,
         bypass_ips=bypass_ips,
-        guided_combos=guided_combos,
-        enable_host_fuzz=enable_host_fuzz,
         host_fuzz_values=host_fuzz_values,
-        enable_smuggling_lite=enable_smuggling_lite,
         smuggling_limit=smuggling_limit,
         domain_mode=domain_mode,
-        auth_challenges=auth_challenges,
         max_vhost_payloads=max_vhost_payloads,
     )
     for s in specs:
@@ -724,11 +522,11 @@ def run_probe(
 
     throttle = RequestThrottle(
         rate_per_second=max(rate_limit, 0.0),
-        jitter_ms=max(jitter_ms, 0),
-        backoff_ms=max(backoff_ms, 0),
+        jitter_ms=0,
+        backoff_ms=1000,
     )
 
-    with make_client(timeout, verify, False, proxy) as client:
+    with make_client(timeout, verify, False) as client:
         baseline = _fetch_baseline_snapshot(
             client,
             target_url=target_url,
@@ -737,12 +535,9 @@ def run_probe(
             timeout=timeout,
             verify=verify,
             follow_redirects=follow_redirects,
-            proxy=proxy,
             profile=profile,
-            auto_calibrate=auto_calibrate,
             calibration_samples=calibration_samples,
             protocol_hint=None,
-            scope_policy=scope_policy,
             throttle=throttle,
         )
         baseline_cache: dict[BaselineKey, BaselineSnapshot] = {
@@ -769,62 +564,37 @@ def run_probe(
                         timeout=timeout,
                         verify=verify,
                         follow_redirects=follow_redirects,
-                        proxy=proxy,
                         profile=profile,
-                        auto_calibrate=auto_calibrate,
                         calibration_samples=calibration_samples,
                         protocol_hint=s.protocol_hint,
-                        scope_policy=scope_policy,
                         throttle=throttle,
                     )
                     transport_baseline_cache[transport_key] = active_baseline
                 baseline_cache[baseline_key] = active_baseline
+
             if s.protocol_hint == "http2":
-                with make_client(timeout, verify, False, proxy, http2=True) as pclient:
+                with make_client(timeout, verify, False, http2=True) as pclient:
                     st2, ln2, final, body_sample, resp_headers, err2 = _fetch(
-                        pclient,
-                        s.method,
-                        s.url,
-                        s.headers,
-                        s.body,
-                        scope_policy=scope_policy,
-                        follow_redirects=follow_redirects,
-                        throttle=throttle,
+                        pclient, s.method, s.url, s.headers, s.body,
+                        follow_redirects=follow_redirects, throttle=throttle,
                     )
             elif s.protocol_hint == "http1_0":
                 st2, ln2, final, body_sample, resp_headers, err2 = _fetch_http10(
-                    s.method,
-                    s.url,
-                    s.headers,
-                    timeout=timeout,
-                    verify=verify,
-                    body=s.body,
-                    scope_policy=scope_policy,
-                    throttle=throttle,
+                    s.method, s.url, s.headers,
+                    timeout=timeout, verify=verify, body=s.body, throttle=throttle,
                 )
             else:
                 st2, ln2, final, body_sample, resp_headers, err2 = _fetch(
-                    client,
-                    s.method,
-                    s.url,
-                    s.headers,
-                    s.body,
-                    scope_policy=scope_policy,
-                    follow_redirects=follow_redirects,
-                    throttle=throttle,
+                    client, s.method, s.url, s.headers, s.body,
+                    follow_redirects=follow_redirects, throttle=throttle,
                 )
+
             tr = TryResult(
-                spec=s,
-                status_code=st2,
-                body_length=ln2,
-                final_url=final,
-                error=err2,
-                response_headers=resp_headers,
+                spec=s, status_code=st2, body_length=ln2,
+                final_url=final, error=err2, response_headers=resp_headers,
             )
             ar = analyze_result(
-                active_baseline,
-                tr,
-                body_sample=body_sample,
+                active_baseline, tr, body_sample=body_sample,
                 config=AnalyzerConfig(
                     length_delta=int(active_baseline.calibration.get("length_delta", profile.length_delta))
                 ),
@@ -840,18 +610,3 @@ def run_probe(
                 progress_callback(idx, total, tr, ar)
 
     return baseline, results
-
-
-def interesting(
-    baseline: BaselineSnapshot,
-    r: TryResult,
-    *,
-    length_delta: int = 50,
-) -> bool:
-    if not r.ok_response:
-        return False
-    if r.status_code != baseline.status_code:
-        return True
-    if abs(r.body_length - baseline.body_length) >= length_delta:
-        return True
-    return False

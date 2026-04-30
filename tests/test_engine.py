@@ -1,5 +1,5 @@
 from bypass.engine import (
-    SAFE_PROFILE,
+    AGGRESSIVE_PROFILE,
     _baseline_body_for_method,
     _baseline_key_for_spec,
     _build_specs,
@@ -18,19 +18,20 @@ def test_dynamic_length_delta_grows_with_spread() -> None:
     assert delta > 40
 
 
-def test_build_specs_domain_mode_adds_auth_family() -> None:
+def test_build_specs_includes_all_families() -> None:
     specs = _build_specs(
-        "https://admin.example.com",
-        mode="all",
-        combine=False,
+        "https://admin.example.com/admin",
         methods=["GET"],
-        profile=SAFE_PROFILE,
         domain_mode=True,
-        auth_challenges=True,
-        guided_combos=False,
     )
     assert any(s.target_type == "domain" for s in specs)
     assert any(s.family == "auth-challenge" for s in specs)
+    assert any(s.path_payload is not None for s in specs)
+    assert any(s.header_payload is not None for s in specs)
+    assert any(s.method_payload is not None for s in specs)
+    assert any(s.protocol_payload is not None for s in specs)
+    assert any(s.host_payload is not None for s in specs)
+    assert any(s.smuggling_payload is not None for s in specs)
 
 
 def test_dedupe_specs_removes_equivalent_requests() -> None:
@@ -57,3 +58,12 @@ def test_baseline_key_tracks_method_protocol_and_family() -> None:
 def test_baseline_body_for_write_methods_uses_empty_json() -> None:
     assert _baseline_body_for_method("POST") == b"{}"
     assert _baseline_body_for_method("GET") is None
+
+
+def test_build_specs_respects_combine_limit() -> None:
+    specs = _build_specs(
+        "https://example.com/admin",
+        methods=["GET", "POST"],
+        bypass_ips=["127.0.0.1", "10.0.0.1"],
+    )
+    assert len(specs) <= AGGRESSIVE_PROFILE.combine_limit

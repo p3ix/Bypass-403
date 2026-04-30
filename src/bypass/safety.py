@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import ipaddress
 import random
 import re
 import time
 from dataclasses import dataclass, field
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 SENSITIVE_HEADER_NAMES = {
@@ -37,14 +35,6 @@ SENSITIVE_QUERY_KEYS = {
 REDACTED = "<redacted>"
 
 
-@dataclass(frozen=True)
-class ScopePolicy:
-    allowed_hosts: tuple[str, ...] = ()
-    allowed_suffixes: tuple[str, ...] = ()
-    deny_private_ip: bool = True
-    allow_cross_host_redirects: bool = False
-
-
 @dataclass
 class RequestThrottle:
     rate_per_second: float = 0.0
@@ -71,65 +61,9 @@ class RequestThrottle:
             )
 
 
-def _normalize_host(host: str) -> str:
-    return host.strip().lower().rstrip(".")
-
-
-def _is_literal_private_host(host: str) -> bool:
-    normalized = _normalize_host(host)
-    if not normalized:
-        return False
-    if normalized == "localhost" or normalized.endswith(".localhost"):
-        return True
-    try:
-        ip = ipaddress.ip_address(normalized)
-    except ValueError:
-        return False
-    return (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_multicast
-        or ip.is_reserved
-        or ip.is_unspecified
-    )
-
-
-def is_url_in_scope(url: str, policy: ScopePolicy) -> tuple[bool, str | None]:
-    parsed = urlsplit(url)
-    host = _normalize_host(parsed.hostname or "")
-    if not host:
-        return False, "host_missing"
-    if policy.deny_private_ip and _is_literal_private_host(host):
-        return False, "private_host_blocked"
-    if policy.allowed_hosts:
-        allowed = {_normalize_host(x) for x in policy.allowed_hosts if x.strip()}
-        if host in allowed:
-            return True, None
-    if policy.allowed_suffixes:
-        suffixes = tuple(_normalize_host(x).lstrip(".") for x in policy.allowed_suffixes if x.strip())
-        for suffix in suffixes:
-            if host == suffix or host.endswith(f".{suffix}"):
-                return True, None
-    if policy.allowed_hosts or policy.allowed_suffixes:
-        return False, "scope_mismatch"
-    return True, None
-
-
-def is_redirect_target_allowed(from_url: str, to_url: str, policy: ScopePolicy) -> tuple[bool, str | None]:
-    allowed, reason = is_url_in_scope(to_url, policy)
-    if not allowed:
-        return False, reason
-    if policy.allow_cross_host_redirects:
-        return True, None
-    from_host = _normalize_host(urlsplit(from_url).hostname or "")
-    to_host = _normalize_host(urlsplit(to_url).hostname or "")
-    if from_host != to_host:
-        return False, "cross_host_redirect_blocked"
-    return True, None
-
-
 def sanitize_url(url: str) -> str:
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
     parsed = urlsplit(url)
     if not parsed.query:
         return url

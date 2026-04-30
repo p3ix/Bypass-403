@@ -8,47 +8,33 @@ runner = CliRunner()
 def test_list_command_works() -> None:
     result = runner.invoke(app, ["list"])
     assert result.exit_code == 0
-    assert "Mutaciones de ruta" in result.stdout
+    assert "Path mutations" in result.stdout
 
 
-def test_probe_help_contains_profiles() -> None:
+def test_probe_help_shows_options() -> None:
     result = runner.invoke(app, ["probe", "--help"])
     assert result.exit_code == 0
-    assert "--profile" in result.stdout
-    assert "all" in result.stdout
-    assert "--host-fuzz" in result.stdout
-    assert "--smuggling-lite" in result.stdout
-    assert "--full" in result.stdout
-    assert "--top-limit" in result.stdout
-    assert "--top-min-score" in result.stdout
-    assert "--scope-host" in result.stdout
+    assert "--json" in result.stdout
     assert "--rate" in result.stdout
+    assert "--top" in result.stdout
+    assert "-k" in result.stdout
+    assert "--method" in result.stdout
+    assert "--host" in result.stdout
 
 
-def test_replay_help_contains_advanced_flags() -> None:
+def test_batch_help_works() -> None:
+    result = runner.invoke(app, ["batch", "--help"])
+    assert result.exit_code == 0
+    assert "--out-dir" in result.stdout
+
+
+def test_replay_help_works() -> None:
     result = runner.invoke(app, ["replay", "--help"])
     assert result.exit_code == 0
     assert "--min-confidence" in result.stdout
-    assert "--replay-methods" in result.stdout
-    assert "--scope-suffix" in result.stdout
-    assert "--delay-jitter-ms" in result.stdout
+    assert "--max-targets" in result.stdout
 
 
-def test_domain_probe_help_contains_domain_flags() -> None:
-    result = runner.invoke(app, ["domain-probe", "--help"])
-    assert result.exit_code == 0
-    assert "auth-challenges" in result.stdout
-    assert "--full" in result.stdout
-
-
-def test_domain_batch_help_works() -> None:
-    result = runner.invoke(app, ["domain-batch", "--help"])
-    assert result.exit_code == 0
-    assert "--out-dir" in result.stdout
-    assert "--full" in result.stdout
-
-
-def test_probe_blocks_private_ip_when_flag_enabled() -> None:
-    result = runner.invoke(app, ["probe", "http://127.0.0.1/admin", "--deny-private-ip"])
-    assert result.exit_code == 2
-    assert "private_host_blocked" in result.stdout
+def test_no_args_shows_help() -> None:
+    result = runner.invoke(app, [])
+    assert "bypass" in result.stdout.lower() or "usage" in result.stdout.lower()

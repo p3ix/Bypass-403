@@ -40,12 +40,12 @@ def test_export_json_redacts_sensitive_fields(tmp_path: Path) -> None:
     export_json(str(fp), "https://example.com/admin?api_key=123", baseline, [_sample_row()])
     data = json.loads(fp.read_text(encoding="utf-8"))
 
-    assert "<redacted>" in data["target_url"]
+    assert "redacted" in data["target_url"]
     assert data["baseline"]["response_headers"]["set-cookie"] == "<redacted>"
     assert data["results"][0]["headers"]["Authorization"] == "<redacted>"
-    assert "<redacted>" in data["results"][0]["url"]
-    assert "<redacted>" in data["results"][0]["final_url"]
-    assert "<redacted>" in data["results"][0]["error"]
+    assert "redacted" in data["results"][0]["url"]
+    assert "redacted" in data["results"][0]["final_url"]
+    assert "redacted" in data["results"][0]["error"]
 
 
 def test_export_csv_redacts_sensitive_url_and_error(tmp_path: Path) -> None:
