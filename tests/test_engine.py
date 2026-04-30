@@ -1,5 +1,7 @@
 from bypass.engine import (
     AGGRESSIVE_PROFILE,
+    _detect_stack_profile,
+    _stack_family_priority,
     _baseline_body_for_method,
     _baseline_key_for_spec,
     _build_specs,
@@ -67,3 +69,17 @@ def test_build_specs_respects_combine_limit() -> None:
         bypass_ips=["127.0.0.1", "10.0.0.1"],
     )
     assert len(specs) <= AGGRESSIVE_PROFILE.combine_limit
+
+
+def test_detect_stack_profile_cloudflare() -> None:
+    profile = _detect_stack_profile(
+        server_header="cloudflare",
+        content_type="text/html",
+        body_sample="Attention Required! | Cloudflare",
+    )
+    assert profile == "cloudflare"
+
+
+def test_stack_family_priority_prefers_path_for_iis() -> None:
+    priorities = _stack_family_priority("iis")
+    assert priorities["path"] < priorities["headers"]

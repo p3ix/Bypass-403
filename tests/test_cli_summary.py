@@ -1,4 +1,4 @@
-from bypass.cli import _header_diff_text, _rank_interesting_rows, tryresult_to_curl
+from bypass.cli import _header_diff_text, _rank_interesting_rows, _summarize_rows, tryresult_to_curl
 from bypass.models import AnalysisResult, RequestSpec, TryResult
 
 
@@ -13,6 +13,17 @@ def _row(status: int, size: int) -> tuple[TryResult, AnalysisResult]:
     return tr, ar
 
 
+def test_summarize_rows_groups_status_and_lengths() -> None:
+    rows = [_row(403, 100), _row(403, 100), _row(403, 120), _row(200, 900), _row(-1, 0)]
+    grouped = _summarize_rows(rows)
+    assert grouped[403]["normal_bytes"] == 100
+    assert grouped[403]["normal_count"] == 2
+    assert grouped[403]["different_count"] == 1
+    assert grouped[403]["different_values"] == [120]
+    assert grouped[200]["normal_bytes"] == 900
+    assert grouped[-1]["normal_bytes"] == 0
+
+
 def test_rank_interesting_rows_prioritizes_status_and_delta() -> None:
     b_status = 403
     b_len = 100
@@ -25,6 +36,27 @@ def test_rank_interesting_rows_prioritizes_status_and_delta() -> None:
         top_limit=5, top_min_score=0,
     )
     assert ranked[0][0].status_code == 200
+
+
+def test_rank_interesting_rows_prioritizes_auth_and_redirect_signals() -> None:
+    b_status = 403
+    b_len = 100
+    r_plain = _row(200, 110)
+    r_plain[1].score = 60
+    r_plain[1].reasons = ["status_changed"]
+    r_auth = _row(302, 108)
+    r_auth[1].score = 45
+    r_auth[1].reasons = [
+        "status_improved_to_3xx",
+        "location_changed",
+        "www_authenticate_changed",
+        "auth_challenge_detected",
+    ]
+    ranked = _rank_interesting_rows(
+        b_status, b_len, [r_plain, r_auth],
+        top_limit=5, top_min_score=0,
+    )
+    assert ranked[0][0].status_code == 302
 
 
 def test_tryresult_to_curl_includes_url_and_header() -> None:

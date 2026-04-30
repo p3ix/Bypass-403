@@ -19,7 +19,7 @@ def test_paths_payloads_have_baseline_and_dedup() -> None:
 
 def test_headers_payloads_count() -> None:
     rows = default_header_sets("/admin", "example.com", "https")
-    assert len(rows) >= 50
+    assert len(rows) >= 60
 
 
 def test_methods_payloads_override_and_trace() -> None:
@@ -46,12 +46,12 @@ def test_protocol_payloads_have_http10_http11_and_http2() -> None:
 
 def test_host_sni_payloads_generated() -> None:
     rows = host_sni_payloads(canonical_host="example.com", custom_hosts=["api.example.com"])
-    assert len(rows) >= 10
+    assert len(rows) >= 14
 
 
 def test_smuggling_payloads_generated() -> None:
     rows = smuggling_lite_payloads()
-    assert len(rows) >= 4
+    assert len(rows) >= 10
 
 
 def test_auth_401_payloads_generated() -> None:

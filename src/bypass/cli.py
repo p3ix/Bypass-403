@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import shlex
+from collections import Counter
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlsplit
@@ -40,6 +41,106 @@ def _status_bucket(status_code: int) -> str:
     if 500 <= status_code < 600:
         return "5xx"
     return "other"
+
+
+def _summarize_rows(rows: list[tuple[TryResult, AnalysisResult]]) -> dict[int, dict[str, object]]:
+    by_status: dict[int, list[int]] = {}
+    for r, _ in rows:
+        status = int(r.status_code)
+        if status not in by_status:
+            by_status[status] = []
+        by_status[status].append(int(r.body_length))
+    out: dict[int, dict[str, object]] = {}
+    for status, lengths in by_status.items():
+        freq = Counter(lengths)
+        normal_bytes, normal_count = max(freq.items(), key=lambda x: (x[1], -x[0]))
+        outliers = sorted([x for x in lengths if x != normal_bytes])
+        out[status] = {
+            "count": len(lengths),
+            "normal_bytes": normal_bytes,
+            "normal_count": normal_count,
+            "different_count": len(outliers),
+            "different_values": sorted(set(outliers)),
+        }
+    return out
+
+
+def _print_status_summary(rows: list[tuple[TryResult, AnalysisResult]]) -> None:
+    counts = {"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0, "err": 0, "other": 0}
+    for r, _ in rows:
+        key = _status_bucket(r.status_code if r.error is None else -1)
+        counts[key] = counts.get(key, 0) + 1
+    table = Table(title="Status summary", show_lines=False)
+    table.add_column("2xx", justify="right")
+    table.add_column("3xx", justify="right")
+    table.add_column("4xx", justify="right")
+    table.add_column("5xx", justify="right")
+    table.add_column("err", justify="right")
+    table.add_column("other", justify="right")
+    table.add_row(
+        str(counts["2xx"]),
+        str(counts["3xx"]),
+        str(counts["4xx"]),
+        str(counts["5xx"]),
+        str(counts["err"]),
+        str(counts["other"]),
+    )
+    console.print(table)
+
+
+def _print_length_summary(rows: list[tuple[TryResult, AnalysisResult]]) -> None:
+    grouped = _summarize_rows(rows)
+    if not grouped:
+        return
+    table = Table(title="Length summary by status", show_lines=False)
+    table.add_column("Status", justify="right")
+    table.add_column("Count", justify="right")
+    table.add_column("Normal bytes", justify="right")
+    table.add_column("Repeats", justify="right")
+    table.add_column("Diff count", justify="right")
+    table.add_column("Different values", max_width=36)
+    for status in sorted(grouped.keys()):
+        item = grouped[status]
+        diff_vals = item["different_values"]
+        diff_text = ",".join(str(x) for x in diff_vals[:6]) if diff_vals else "-"
+        if isinstance(diff_vals, list) and len(diff_vals) > 6:
+            diff_text += ",..."
+        table.add_row(
+            str(status),
+            str(item["count"]),
+            str(item["normal_bytes"]),
+            str(item["normal_count"]),
+            str(item["different_count"]),
+            diff_text,
+        )
+    console.print(table)
+
+
+def _print_response_clusters(rows: list[tuple[TryResult, AnalysisResult]]) -> None:
+    grouped: dict[tuple[int, int, str, str], int] = {}
+    for r, _ in rows:
+        wa = (r.response_headers.get("www-authenticate", "") or "").strip().lower()[:40]
+        loc = (r.response_headers.get("location", "") or "").strip().lower()[:60]
+        key = (int(r.status_code), int(r.body_length), wa, loc)
+        grouped[key] = grouped.get(key, 0) + 1
+    if not grouped:
+        return
+    ranked = sorted(grouped.items(), key=lambda x: x[1], reverse=True)[:8]
+    table = Table(title="Response clusters (noise control)", show_lines=False)
+    table.add_column("Count", justify="right")
+    table.add_column("Status", justify="right")
+    table.add_column("Bytes", justify="right")
+    table.add_column("WWW-Auth", max_width=22)
+    table.add_column("Location", max_width=36)
+    for (status, length, wa, loc), count in ranked:
+        table.add_row(
+            str(count),
+            str(status),
+            str(length),
+            wa or "-",
+            loc or "-",
+        )
+    console.print(table)
 
 
 def _payload_label(r: TryResult) -> str:
@@ -222,7 +323,32 @@ def _rank_interesting_rows(
         if a.score < top_min_score:
             continue
         delta = abs(r.body_length - baseline_len)
-        rank = a.score + _status_priority(baseline_status, r.status_code) + min(delta // 10, 60)
+        reasons = set(a.reasons)
+        bb_bonus = 0
+        # Prioriza hallazgos típicos de bug bounty: cambios de capa/auth/redirect y saltos claros.
+        if r.status_code in {200, 201, 202, 204}:
+            bb_bonus += 80
+        elif 300 <= r.status_code < 400:
+            bb_bonus += 45
+        if "status_improved_to_2xx" in reasons:
+            bb_bonus += 80
+        if "status_improved_to_3xx" in reasons:
+            bb_bonus += 50
+        if "reached_auth_layer" in reasons:
+            bb_bonus += 40
+        if "www_authenticate_changed" in reasons:
+            bb_bonus += 25
+        if "auth_challenge_detected" in reasons:
+            bb_bonus += 20
+        if "location_changed" in reasons:
+            bb_bonus += 20
+        if "content_type_changed" in reasons:
+            bb_bonus += 10
+        if delta >= 500:
+            bb_bonus += 30
+        elif delta >= 120:
+            bb_bonus += 15
+        rank = a.score + _status_priority(baseline_status, r.status_code) + min(delta // 10, 60) + bb_bonus
         ranked.append((r, a, delta, rank))
     ranked.sort(key=lambda x: (x[3], x[1].score, x[2]), reverse=True)
     return ranked[: max(0, top_limit)]
@@ -360,6 +486,7 @@ def probe(
             follow_redirects=follow,
             bypass_ips=bypass_ip or None,
             host_fuzz_values=host or None,
+            domain_mode=True,
             calibration_samples=5,
             progress_callback=on_progress,
             rate_limit=rate_limit,
@@ -384,14 +511,19 @@ def probe(
             f"avg_len={base.calibration.get('avg_length')} "
             f"delta={base.calibration.get('length_delta')}[/]"
         )
+    stack_profile = str(base.calibration.get("stack_profile", "generic"))
+    console.print(f"[dim]Stack profile: {stack_profile}[/]")
 
     _print_top_bypasses(
-        base.status_code, base.body_length, visible_rows,
+        base.status_code, base.body_length, results,
         top_limit=top_limit, top_min_score=35,
         insecure=insecure, follow_redirects=follow, timeout=timeout,
         baseline_request_headers={},
         baseline_response_headers=base.response_headers,
     )
+    _print_status_summary(results)
+    _print_length_summary(results)
+    _print_response_clusters(results)
 
     if not quiet:
         if not visible_rows and filter_interesting:
@@ -468,6 +600,7 @@ def batch(
                 follow_redirects=follow,
                 bypass_ips=bypass_ip or None,
                 host_fuzz_values=host or None,
+                domain_mode=True,
                 rate_limit=rate_limit,
             )
             visible_rows = [(r, a) for r, a in rows if (a.interesting or all_results)]

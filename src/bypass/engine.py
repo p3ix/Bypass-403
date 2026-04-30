@@ -50,6 +50,24 @@ def _extract_title(body_sample: str) -> str:
     return " ".join(m.group(1).split())[:160]
 
 
+def _detect_stack_profile(*, server_header: str, content_type: str, body_sample: str) -> str:
+    s = (server_header or "").lower()
+    ct = (content_type or "").lower()
+    body = (body_sample or "").lower()
+    blob = " ".join([s, ct, body])
+    if any(x in blob for x in ("cloudflare", "__cf_bm", "cf-ray", "attention required")):
+        return "cloudflare"
+    if any(x in blob for x in ("akamai", "ak_bmsc", "ghost", "akamaighost")):
+        return "akamai"
+    if any(x in blob for x in ("nginx", "openresty")):
+        return "nginx"
+    if any(x in blob for x in ("iis", "asp.net", "x-aspnet-version", "microsoft-iis")):
+        return "iis"
+    if any(x in blob for x in ("envoy", "kong", "x-amzn", "api gateway", "apigw")):
+        return "api-gateway"
+    return "generic"
+
+
 def _spec_family_name(spec: RequestSpec) -> str:
     if spec.family:
         return spec.family
@@ -399,6 +417,81 @@ def _build_specs(
     return _dedupe_specs(specs)
 
 
+def _stack_family_priority(stack_profile: str) -> dict[str, int]:
+    # Lower value means executed earlier.
+    if stack_profile == "cloudflare":
+        return {
+            "host": 0,
+            "headers": 1,
+            "query": 2,
+            "path": 3,
+            "protocol": 4,
+            "methods": 5,
+            "smuggling": 6,
+            "auth-challenge": 7,
+            "general": 8,
+        }
+    if stack_profile == "akamai":
+        return {
+            "headers": 0,
+            "host": 1,
+            "path": 2,
+            "query": 3,
+            "methods": 4,
+            "protocol": 5,
+            "smuggling": 6,
+            "auth-challenge": 7,
+            "general": 8,
+        }
+    if stack_profile == "nginx":
+        return {
+            "path": 0,
+            "headers": 1,
+            "host": 2,
+            "query": 3,
+            "methods": 4,
+            "protocol": 5,
+            "smuggling": 6,
+            "auth-challenge": 7,
+            "general": 8,
+        }
+    if stack_profile == "iis":
+        return {
+            "path": 0,
+            "methods": 1,
+            "headers": 2,
+            "host": 3,
+            "query": 4,
+            "protocol": 5,
+            "smuggling": 6,
+            "auth-challenge": 7,
+            "general": 8,
+        }
+    if stack_profile == "api-gateway":
+        return {
+            "host": 0,
+            "headers": 1,
+            "auth-challenge": 2,
+            "query": 3,
+            "path": 4,
+            "methods": 5,
+            "protocol": 6,
+            "smuggling": 7,
+            "general": 8,
+        }
+    return {
+        "path": 0,
+        "headers": 1,
+        "host": 2,
+        "query": 3,
+        "methods": 4,
+        "protocol": 5,
+        "smuggling": 6,
+        "auth-challenge": 7,
+        "general": 8,
+    }
+
+
 def _spec_fingerprint(spec: RequestSpec) -> tuple[object, ...]:
     header_items = tuple(sorted((k.lower(), v) for k, v in spec.headers.items()))
     body_digest = hashlib.sha256(spec.body or b"").hexdigest() if spec.body is not None else ""
@@ -508,17 +601,6 @@ def run_probe(
     profile = AGGRESSIVE_PROFILE
     methods = [x.upper() for x in (methods or ["GET"])]
     base_hdrs: dict[str, str] = dict(extra_headers or {})
-    specs = _build_specs(
-        target_url,
-        methods=methods,
-        bypass_ips=bypass_ips,
-        host_fuzz_values=host_fuzz_values,
-        smuggling_limit=smuggling_limit,
-        domain_mode=domain_mode,
-        max_vhost_payloads=max_vhost_payloads,
-    )
-    for s in specs:
-        s.headers = {**base_hdrs, **s.headers}
 
     throttle = RequestThrottle(
         rate_per_second=max(rate_limit, 0.0),
@@ -540,6 +622,31 @@ def run_probe(
             protocol_hint=None,
             throttle=throttle,
         )
+        stack_profile = _detect_stack_profile(
+            server_header=baseline.response_headers.get("server", ""),
+            content_type=baseline.response_headers.get("content-type", ""),
+            body_sample=baseline.body_sample,
+        )
+        baseline.calibration["stack_profile"] = stack_profile
+        specs = _build_specs(
+            target_url,
+            methods=methods,
+            bypass_ips=bypass_ips,
+            host_fuzz_values=host_fuzz_values,
+            smuggling_limit=smuggling_limit,
+            domain_mode=domain_mode,
+            max_vhost_payloads=max_vhost_payloads,
+        )
+        family_priority = _stack_family_priority(stack_profile)
+        specs.sort(
+            key=lambda s: (
+                family_priority.get(_spec_family_name(s), 50),
+                s.method,
+                s.url,
+            )
+        )
+        for s in specs:
+            s.headers = {**base_hdrs, **s.headers}
         baseline_cache: dict[BaselineKey, BaselineSnapshot] = {
             ("GET", "http1_1", "general"): baseline,
         }

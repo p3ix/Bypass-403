@@ -25,6 +25,11 @@ def host_sni_payloads(
             ({":authority": host}, f"host_authority_{idx}", f":authority: {host}"),
             ({"host": host}, f"host_lower_{idx}", f"host lowercase: {host}"),
             ({"Host": host, "X-Forwarded-Host": host}, f"host_dual_{idx}", f"Host + X-Forwarded-Host: {host}"),
+            ({"Host": f"{host}."}, f"host_trailing_dot_{idx}", f"Host trailing dot: {host}."),
+            ({":authority": f"{host}:443"}, f"host_authority_443_{idx}", f":authority: {host}:443"),
+            ({"Host": host, ":authority": host}, f"host_host_authority_{idx}", f"Host + :authority: {host}"),
+            ({"Host": "localhost", "X-Forwarded-Host": host}, f"host_localhost_xfh_{idx}", f"Host localhost + XFH {host}"),
+            ({"Host": host, "X-Original-Host": "localhost"}, f"host_xorig_local_{idx}", f"Host {host} + X-Original-Host localhost"),
         ]
         for hdrs, pid, label in candidates:
             out.append(

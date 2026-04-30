@@ -180,6 +180,19 @@ def default_header_sets(
             "{scheme}://{host}{path}",
             {},
         ),
+        ("h_xff_space_colon", "X-Forwarded-For : loopback", "X-Forwarded-For ", "127.0.0.1", {"parser_confusion": True}),
+        ("h_xff_tab_value", "X-Forwarded-For with tab value", "X-Forwarded-For", "\t127.0.0.1", {"parser_confusion": True}),
+        ("h_xff_port", "X-Forwarded-For: loopback:port", "X-Forwarded-For", "127.0.0.1:80", {"parser_confusion": True}),
+        ("h_xff_mixed_chain", "X-Forwarded-For mixed chain", "X-Forwarded-For", "unknown, 127.0.0.1", {"chain": True}),
+        ("h_xff_ipv6_bracket", "X-Forwarded-For IPv6 bracket", "X-Forwarded-For", "[::1]", {"ipv6": True}),
+        ("h_x_forwarded_host_trailing_dot", "X-Forwarded-Host trailing dot", "X-Forwarded-Host", "{host}.", {"vhost_confusion": True}),
+        ("h_x_forwarded_host_port", "X-Forwarded-Host: localhost:443", "X-Forwarded-Host", "localhost:443", {"vhost_confusion": True}),
+        ("h_host_trailing_dot", "Host trailing dot", "Host", "{host}.", {"vhost_confusion": True}),
+        ("h_host_with_port_8443", "Host with :8443", "Host", "{host}:8443", {"vhost_confusion": True}),
+        ("h_forwarded_quoted", "Forwarded quoted fields", "Forwarded", 'for="127.0.0.1";host="{host}";proto="{scheme}"', {"parser_confusion": True}),
+        ("h_forwarded_proto_http_host_local", "Forwarded proto/http host localhost", "Forwarded", "for=127.0.0.1;proto=http;host=localhost", {"vhost_confusion": True}),
+        ("h_x_original_url_encoded", "X-Original-URL encoded path", "X-Original-URL", "%2f{path}", {"encoded_path": True}),
+        ("h_x_rewrite_url_encoded", "X-Rewrite-URL encoded path", "X-Rewrite-URL", "%2f{path}", {"encoded_path": True}),
     ]
     ip_pool: list[str] = ["127.0.0.1", "::1", "10.0.0.1", "192.168.0.1"]
     for ip in (bypass_ips or []):
