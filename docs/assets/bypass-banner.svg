@@ -1,105 +1,262 @@
-<svg width="1280" height="380" viewBox="0 0 1280 380" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">Bypass — 403/401 bypass toolkit</title>
-  <desc id="desc">Professional banner for Bypass, an authorized security testing CLI.</desc>
-
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" width="1280" height="360">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="380" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0B0F14"/>
-      <stop offset="0.5" stop-color="#0E141C"/>
-      <stop offset="1" stop-color="#0A1218"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#06090F"/>
+      <stop offset="100%" stop-color="#0C1524"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-      <stop stop-color="#3EE8B0"/>
-      <stop offset="1" stop-color="#2BB8D9"/>
+    <pattern id="dotGrid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <circle cx="16" cy="16" r="0.9" fill="#1A2840" opacity="0.8"/>
+    </pattern>
+    <radialGradient id="glowLeft" cx="210" cy="180" r="270" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF3333" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#FF3333" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowCenter" cx="590" cy="175" r="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00D4FF" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#00D4FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowRight" cx="1072" cy="180" r="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00FF88" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#00FF88" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="fGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="fGlowRed" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="fTitle" x="-5%" y="-30%" width="110%" height="160%">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="accentGrad" x1="365" y1="0" x2="920" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00D4FF" stop-opacity="1"/>
+      <stop offset="65%" stop-color="#00D4FF" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#00D4FF" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="panelFill" x1="48" y1="72" x2="468" y2="308" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#121A24"/>
-      <stop offset="1" stop-color="#0C1218"/>
+    <linearGradient id="borderGrad" x1="0" y1="0" x2="1280" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00D4FF" stop-opacity="0"/>
+      <stop offset="18%" stop-color="#00D4FF" stop-opacity="0.9"/>
+      <stop offset="50%" stop-color="#0099EE" stop-opacity="0.6"/>
+      <stop offset="82%" stop-color="#00FF88" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#00FF88" stop-opacity="0"/>
     </linearGradient>
-    <clipPath id="roundOuter">
-      <rect width="1280" height="380" rx="28" ry="28"/>
-    </clipPath>
-    <clipPath id="termBody">
-      <rect x="48" y="108" width="420" height="200" rx="0"/>
+    <clipPath id="clip">
+      <rect width="1280" height="360" rx="14"/>
     </clipPath>
   </defs>
 
-  <g clip-path="url(#roundOuter)">
-    <!-- Background -->
-    <rect width="1280" height="380" fill="url(#bg)"/>
-    <rect x="0" y="0" width="1280" height="4" fill="url(#accent)"/>
+  <!-- BACKGROUND -->
+  <rect width="1280" height="360" fill="url(#bg)" clip-path="url(#clip)"/>
+  <rect width="1280" height="360" fill="url(#dotGrid)" clip-path="url(#clip)" opacity="0.55"/>
+  <rect width="1280" height="360" fill="url(#glowLeft)" clip-path="url(#clip)"/>
+  <rect width="1280" height="360" fill="url(#glowCenter)" clip-path="url(#clip)"/>
+  <rect width="1280" height="360" fill="url(#glowRight)" clip-path="url(#clip)"/>
 
-    <!-- Grid -->
-    <g opacity="0.18" stroke="#2A3A48" stroke-width="1">
-      <path d="M0 76H1280M0 152H1280M0 228H1280M0 304H1280"/>
-      <path d="M64 0V380M128 0V380M192 0V380M256 0V380M320 0V380M384 0V380M448 0V380M512 0V380M576 0V380M640 0V380M704 0V380M768 0V380M832 0V380M896 0V380M960 0V380M1024 0V380M1088 0V380M1152 0V380M1216 0V380"/>
-    </g>
+  <!-- Border and accent lines -->
+  <rect width="1280" height="360" rx="14" fill="none" stroke="#1A2840" stroke-width="1.5"/>
+  <rect x="0" y="0" width="1280" height="2.5" fill="url(#borderGrad)" clip-path="url(#clip)"/>
+  <rect x="0" y="357.5" width="1280" height="2.5" fill="url(#borderGrad)" clip-path="url(#clip)"/>
 
-    <!-- ═══ Column 1: Terminal (x 48–468) ═══ -->
-    <rect x="48" y="72" width="420" height="236" rx="20" fill="url(#panelFill)" stroke="#2A3F4F" stroke-width="1"/>
-    <!-- Title bar -->
-    <path d="M48 92C48 81.9543 56.9543 73 67 73H449C459.046 73 468 81.9543 468 92V108H48V92Z" fill="#0A1016"/>
-    <line x1="48" y1="108" x2="468" y2="108" stroke="#2A3F4F" stroke-width="1"/>
-    <circle cx="74" cy="90" r="5" fill="#FF5F57"/>
-    <circle cx="94" cy="90" r="5" fill="#FEBC2E"/>
-    <circle cx="114" cy="90" r="5" fill="#28C840"/>
-    <text x="132" y="94" fill="#5E7383" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11">bypass probe</text>
+  <!-- ===== LOCK ICON (left) ===== -->
+  <!-- Outer pulse rings -->
+  <ellipse cx="205" cy="183" rx="98" ry="90" fill="none" stroke="#FF3333" stroke-width="1" opacity="0.10"/>
+  <ellipse cx="205" cy="183" rx="78" ry="72" fill="none" stroke="#FF3333" stroke-width="1" opacity="0.13"/>
 
-    <g clip-path="url(#termBody)" font-family="ui-monospace, Menlo, Consolas, monospace">
-      <text x="72" y="142" fill="#5EEAD4" font-size="15" font-weight="600">$</text>
-      <text x="88" y="142" fill="#E8F1F5" font-size="15"> bypass target.tld/admin -k</text>
-      <text x="72" y="172" fill="#94A8B5" font-size="14">baseline</text>
-      <text x="142" y="172" fill="#64748B" font-size="14"> 403</text>
-      <text x="178" y="172" fill="#64748B" font-size="14"> → </text>
-      <text x="198" y="172" fill="#34D399" font-size="14" font-weight="700">200</text>
-      <text x="232" y="172" fill="#64748B" font-size="14"> · verified</text>
-      <text x="72" y="200" fill="#64748B" font-size="13">path · headers · host · smuggling</text>
-      <rect x="72" y="218" width="180" height="3" rx="1.5" fill="url(#accent)"/>
-    </g>
+  <!-- Shackle (U-shape) -->
+  <path d="M 177,162 L 177,135 Q 177,107 205,107 Q 233,107 233,135 L 233,162"
+        fill="none" stroke="#FF4444" stroke-width="3" stroke-linecap="round"
+        filter="url(#fGlowRed)" opacity="0.92"/>
 
-    <!-- ═══ Column 2: Brand (x 500–968) ═══ -->
-    <!-- Logo -->
-    <rect x="500" y="88" width="52" height="52" rx="14" fill="#121A24" stroke="#2A3F4F" stroke-width="1"/>
-    <path d="M526 102L538 110V122L526 130L514 122V110L526 102Z" stroke="url(#accent)" stroke-width="2" fill="none"/>
-    <path d="M520 116H532M526 110V122" stroke="#5EEAD4" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- Lock body -->
+  <rect x="168" y="162" width="74" height="62" rx="9"
+        fill="#130808" stroke="#FF4444" stroke-width="2.5" opacity="0.95"/>
 
-    <text x="568" y="128" fill="#F8FAFC" font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif" font-size="48" font-weight="700" letter-spacing="-0.02em">Bypass</text>
+  <!-- Keyhole -->
+  <circle cx="205" cy="181" r="8.5" fill="#FF3333" opacity="0.65" filter="url(#fGlowRed)"/>
+  <rect x="202" y="181" width="6" height="14" rx="2" fill="#FF3333" opacity="0.65"/>
 
-    <text x="500" y="168" fill="#94A8B5" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="500">403/401 bypass toolkit</text>
+  <!-- 403 label inside lock -->
+  <text x="205" y="220" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="13" font-weight="bold" letter-spacing="1"
+        fill="#FF5555" opacity="0.80">403</text>
 
-    <text x="500" y="198" fill="#64748B" font-family="Inter, system-ui, sans-serif" font-size="15">Async · raw sockets · verified · JSON/CSV/curl</text>
+  <!-- Bypass arc over the lock -->
+  <path d="M 143,185 C 100,52 312,52 267,185"
+        fill="none" stroke="#00FF88" stroke-width="2.5" stroke-linecap="round"
+        filter="url(#fGlow)" opacity="0.90"/>
 
-    <!-- Pills row -->
-    <rect x="500" y="224" width="100" height="30" rx="15" fill="#121A24" stroke="#2A3F4F" stroke-width="1"/>
-    <text x="518" y="244" fill="#5EEAD4" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="600">Bug Bounty</text>
+  <!-- Arrowhead at arc end, pointing down -->
+  <polygon points="261,177 273,177 267,192" fill="#00FF88" opacity="0.90" filter="url(#fGlow)"/>
 
-    <rect x="612" y="224" width="118" height="30" rx="15" fill="#121A24" stroke="#2A3F4F" stroke-width="1"/>
-    <text x="630" y="244" fill="#C3D5DC" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="600">Authorized use</text>
+  <!-- Arc endpoint labels -->
+  <text x="133" y="180" text-anchor="end"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#FF6666" opacity="0.72">[403]</text>
+  <text x="277" y="179"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#00FF88" opacity="0.88" filter="url(#fGlow)">[200]</text>
 
-    <rect x="742" y="224" width="88" height="30" rx="15" fill="#121A24" stroke="#2A3F4F" stroke-width="1"/>
-    <text x="760" y="244" fill="#C3D5DC" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="600">Python 3.10+</text>
+  <!-- Section divider -->
+  <line x1="342" y1="50" x2="342" y2="310" stroke="#1A2840" stroke-width="1" opacity="0.9"/>
+  <line x1="342" y1="50" x2="342" y2="310" stroke="#00D4FF" stroke-width="0.8" opacity="0.14"/>
 
-    <text x="500" y="286" fill="#5EEAD4" font-family="ui-monospace, Menlo, monospace" font-size="13" font-weight="600">@p3i</text>
+  <!-- ===== MAIN TITLE ===== -->
+  <text x="365" y="188"
+        font-family="'Courier New', Courier, monospace"
+        font-size="96" font-weight="bold" letter-spacing="10"
+        fill="#E8EEF8" filter="url(#fTitle)" opacity="0.97">BYPASS</text>
 
-    <!-- ═══ Column 3: Status (x 1000–1232) ═══ -->
-    <rect x="1000" y="72" width="232" height="236" rx="20" fill="#121A24" stroke="#2A3F4F" stroke-width="1"/>
+  <!-- Accent underline -->
+  <rect x="365" y="199" width="555" height="2.5" rx="1.5" fill="url(#accentGrad)" opacity="0.92"/>
 
-    <text x="1024" y="108" fill="#64748B" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="600" letter-spacing="0.08em">STATUS</text>
+  <!-- Subtitle -->
+  <text x="368" y="229"
+        font-family="'Courier New', Courier, monospace"
+        font-size="16" letter-spacing="4" fill="#00D4FF" opacity="0.90">403 / 401 BYPASS TOOLKIT</text>
 
-    <rect x="1024" y="124" width="184" height="44" rx="12" fill="#0A1016" stroke="#2A3F4F" stroke-width="1"/>
-    <circle cx="1044" cy="146" r="5" fill="#F59E0B"/>
-    <text x="1060" y="151" fill="#E8F1F5" font-family="ui-monospace, Menlo, monospace" font-size="13">403 Forbidden</text>
+  <!-- Description -->
+  <text x="368" y="252"
+        font-family="'Courier New', Courier, monospace"
+        font-size="12" letter-spacing="0.4"
+        fill="#6E7681" opacity="0.85">Professional access-control bypass for Bug Bounty &amp; Red Team</text>
 
-    <path d="M1044 178V198" stroke="#334155" stroke-width="2" stroke-linecap="round"/>
+  <!-- Tags -->
+  <rect x="368" y="268" width="104" height="24" rx="5" fill="#071322" stroke="#58A6FF" stroke-width="1.2" opacity="0.9"/>
+  <text x="420" y="285" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace" font-size="11"
+        fill="#79C0FF" letter-spacing="0.5">Bug Bounty</text>
 
-    <rect x="1024" y="206" width="184" height="44" rx="12" fill="#0A1016" stroke="#1E3A32" stroke-width="1"/>
-    <circle cx="1044" cy="228" r="5" fill="#34D399"/>
-    <text x="1060" y="233" fill="#34D399" font-family="ui-monospace, Menlo, monospace" font-size="13" font-weight="700">200 OK</text>
+  <rect x="479" y="268" width="84" height="24" rx="5" fill="#150808" stroke="#F85149" stroke-width="1.2" opacity="0.9"/>
+  <text x="521" y="285" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace" font-size="11"
+        fill="#FF7B72" letter-spacing="0.5">Red Team</text>
 
-    <rect x="1024" y="268" width="184" height="28" rx="14" fill="#0F1F1A" stroke="#1E3A32" stroke-width="1"/>
-    <text x="1044" y="287" fill="#5EEAD4" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="600">curl reproducible</text>
-  </g>
+  <rect x="570" y="268" width="76" height="24" rx="5" fill="#0A1018" stroke="#79C0FF" stroke-width="1.2" opacity="0.9"/>
+  <text x="608" y="285" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace" font-size="11"
+        fill="#A5D6FF" letter-spacing="0.5">Pentest</text>
 
-  <!-- Outer stroke for rounded frame -->
-  <rect x="0.5" y="0.5" width="1279" height="379" rx="27.5" ry="27.5" fill="none" stroke="#2A3F4F" stroke-width="1"/>
+  <rect x="653" y="268" width="66" height="24" rx="5" fill="#120E05" stroke="#D29922" stroke-width="1.2" opacity="0.9"/>
+  <text x="686" y="285" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace" font-size="11"
+        fill="#E3B341" letter-spacing="0.5">Async</text>
+
+  <rect x="726" y="268" width="92" height="24" rx="5" fill="#081508" stroke="#3FB950" stroke-width="1.2" opacity="0.9"/>
+  <text x="772" y="285" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace" font-size="11"
+        fill="#56D364" letter-spacing="0.5">Python 3.10+</text>
+
+  <!-- ===== TERMINAL WINDOW (right) ===== -->
+  <rect x="896" y="44" width="352" height="274" rx="10"
+        fill="#090C14" stroke="#1C2030" stroke-width="1.5"/>
+
+  <!-- Titlebar -->
+  <rect x="896" y="44" width="352" height="30" rx="10" fill="#141820"/>
+  <rect x="896" y="60" width="352" height="14" fill="#141820"/>
+
+  <!-- Window buttons -->
+  <circle cx="920" cy="59" r="5.5" fill="#FF5F57" opacity="0.9"/>
+  <circle cx="939" cy="59" r="5.5" fill="#FEBC2E" opacity="0.9"/>
+  <circle cx="958" cy="59" r="5.5" fill="#28C840" opacity="0.9"/>
+
+  <!-- Terminal title -->
+  <text x="1072" y="65" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace" font-size="11"
+        fill="#585F6C">bypass — output</text>
+
+  <!-- Prompt -->
+  <text x="912" y="96" font-family="'Courier New', Courier, monospace" font-size="11">
+    <tspan fill="#56D364">$</tspan>
+    <tspan fill="#79C0FF"> bypass </tspan>
+    <tspan fill="#8B949E">https://target.tld/admin</tspan>
+  </text>
+
+  <!-- Baseline section -->
+  <text x="912" y="115" font-family="'Courier New', Courier, monospace"
+        font-size="9.5" fill="#3D4451" letter-spacing="1">[ BASELINE ]</text>
+
+  <text x="912" y="130" font-family="'Courier New', Courier, monospace" font-size="11">
+    <tspan fill="#8B949E">  GET /admin</tspan>
+    <tspan fill="#585F6C">  →  </tspan>
+    <tspan fill="#F85149">403 Forbidden</tspan>
+  </text>
+
+  <line x1="912" y1="141" x2="1236" y2="141" stroke="#1C2030" stroke-width="1"/>
+
+  <!-- Findings section -->
+  <text x="912" y="157" font-family="'Courier New', Courier, monospace"
+        font-size="9.5" fill="#3D4451" letter-spacing="1">[ FINDINGS — RANKED ]</text>
+
+  <!-- Finding 1 -->
+  <text x="912" y="173" font-family="'Courier New', Courier, monospace" font-size="11">
+    <tspan fill="#56D364">+ </tspan>
+    <tspan fill="#3FB950">X-Original-URL: /admin/../</tspan>
+  </text>
+  <text x="912" y="186" font-family="'Courier New', Courier, monospace" font-size="10.5">
+    <tspan fill="#585F6C">  status: </tspan>
+    <tspan fill="#56D364">200</tspan>
+    <tspan fill="#585F6C">  score: </tspan>
+    <tspan fill="#56D364">95</tspan>
+    <tspan fill="#585F6C">  verified </tspan>
+    <tspan fill="#56D364">✓</tspan>
+  </text>
+
+  <!-- Finding 2 -->
+  <text x="912" y="201" font-family="'Courier New', Courier, monospace" font-size="11">
+    <tspan fill="#56D364">+ </tspan>
+    <tspan fill="#3FB950">X-Forwarded-For: 127.0.0.1</tspan>
+  </text>
+  <text x="912" y="214" font-family="'Courier New', Courier, monospace" font-size="10.5">
+    <tspan fill="#585F6C">  status: </tspan>
+    <tspan fill="#56D364">200</tspan>
+    <tspan fill="#585F6C">  score: </tspan>
+    <tspan fill="#56D364">88</tspan>
+    <tspan fill="#585F6C">  verified </tspan>
+    <tspan fill="#56D364">✓</tspan>
+  </text>
+
+  <!-- Finding 3 -->
+  <text x="912" y="229" font-family="'Courier New', Courier, monospace" font-size="11">
+    <tspan fill="#D29922">~ </tspan>
+    <tspan fill="#C9A227">path: /ADMIN/%2e%2e/</tspan>
+  </text>
+  <text x="912" y="242" font-family="'Courier New', Courier, monospace" font-size="10.5">
+    <tspan fill="#585F6C">  status: </tspan>
+    <tspan fill="#56D364">200</tspan>
+    <tspan fill="#585F6C">  score: </tspan>
+    <tspan fill="#D29922">72</tspan>
+    <tspan fill="#585F6C">  medium</tspan>
+  </text>
+
+  <line x1="912" y1="253" x2="1236" y2="253" stroke="#1C2030" stroke-width="1"/>
+
+  <!-- Summary -->
+  <text x="912" y="269" font-family="'Courier New', Courier, monospace" font-size="10.5">
+    <tspan fill="#56D364">2 high</tspan>
+    <tspan fill="#3D4451">  ·  </tspan>
+    <tspan fill="#D29922">1 medium</tspan>
+    <tspan fill="#3D4451">  ·  scan complete</tspan>
+  </text>
+
+  <!-- ===== BOTTOM BAR ===== -->
+  <line x1="40" y1="316" x2="1240" y2="316" stroke="#1A2840" stroke-width="1" opacity="0.7"/>
+
+  <text x="50" y="339"
+        font-family="'Courier New', Courier, monospace" font-size="12"
+        fill="#484F58">by </text>
+  <text x="72" y="339"
+        font-family="'Courier New', Courier, monospace" font-size="12" font-weight="bold"
+        fill="#58A6FF" opacity="0.90">p3i</text>
+
+  <text x="640" y="339" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace" font-size="11" letter-spacing="0.5"
+        fill="#3D4451">Authorized access-control bypass for security professionals</text>
+
+  <text x="1230" y="339" text-anchor="end"
+        font-family="'Courier New', Courier, monospace" font-size="11"
+        fill="#484F58">Authorized Testing Only</text>
 </svg>

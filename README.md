@@ -1,8 +1,8 @@
-<div align="center">
-
-![Bypass — 403/401 bypass toolkit](docs/assets/bypass-banner.svg)
-
 # Bypass
+
+<p align="center">
+  <img src="docs/assets/bypass-banner.svg" alt="Bypass Banner" width="100%"/>
+</p>
 
 **Professional 403/401 bypass toolkit for authorized Bug Bounty, Red Team and Pentesting.**
 
@@ -14,8 +14,6 @@ Automates high-yield access-control bypass techniques, ranks the most promising 
 [![HTTP](https://img.shields.io/badge/httpx-async%20%2B%20raw%20sockets-1F8A70?style=flat-square)](https://www.python-httpx.org/)
 [![Use](https://img.shields.io/badge/use-authorized%20testing-critical?style=flat-square)](#responsible-use)
 [![Output](https://img.shields.io/badge/output-json%20%7C%20csv%20%7C%20curl-4B5563?style=flat-square)](#output)
-
-</div>
 
 ## Highlights
 
