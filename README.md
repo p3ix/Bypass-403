@@ -4,6 +4,8 @@
 
 **Bypass** is a professional 403/401 bypass toolkit for authorized Bug Bounty, Red Team and Pentesting work. It automates high-yield access-control bypass techniques, ranks the most promising results, verifies findings against fresh baselines, and gives you reproducible evidence.
 
+Author: **p3i**
+
 [![Python](https://img.shields.io/badge/python-3.10%2B-2B6CB0)](https://www.python.org/)
 [![HTTP](https://img.shields.io/badge/httpx-async%20%2B%20raw%20sockets-1F8A70)](https://www.python-httpx.org/)
 [![Use](https://img.shields.io/badge/use-authorized%20testing-critical)](#responsible-use)
@@ -13,7 +15,7 @@
 
 - 403/401 bypass automation for paths, headers, methods, query params, protocol variants and auth challenge behavior.
 - Real Host/SNI testing with raw sockets for vhost and origin-bypass workflows.
-- Smuggling-lite probes over raw sockets, including CL/TE conflicts and duplicate header forms.
+- Smuggling-lite probes over raw sockets, including CL.TE, TE.CL, CL.CL, pause-based probes and reuse timing.
 - Async scanning with controlled concurrency, per-host rate limiting and 429/503 backoff.
 - Automatic verification of interesting findings against fresh baselines.
 - Raw request import from Burp/ZAP-style files.
@@ -88,7 +90,7 @@ Bypass currently tests:
 | Query mutation | Parameter pollution, debug/admin hints, encoded/null-byte query values. |
 | Protocol switching | HTTP/1.0, HTTP/1.1 and HTTP/2 transport probes. |
 | Host/SNI | Raw TLS SNI plus `Host`, `:authority`, `X-Forwarded-Host`, `X-Host` and custom vhost candidates. |
-| Smuggling-lite | Raw socket CL/TE conflicts, obfuscated `Transfer-Encoding`, duplicate `Content-Length` and duplicate `Transfer-Encoding` probes. |
+| Smuggling-lite | Raw CL.TE, TE.CL, CL.CL, duplicate header forms, pause-based probes, connection reuse timing and conservative evidence heuristics. |
 | Auth challenge | Basic, Bearer, NTLM and Negotiate challenge behavior. |
 | Guided combos | High-yield path plus IP headers, method override plus encoded path combinations. |
 
@@ -354,7 +356,7 @@ Planned next improvements:
 - **Recon ingestion**: native imports from `httpx`, `katana`, `gau`, `waybackurls`, Burp sitemap and Nuclei output.
 - **Report generator**: Markdown/HTML report with verified evidence, impact notes, reproduction steps and suggested severity.
 - **Nuclei integration**: export verified findings into focused templates or replay checks.
-- **More raw smuggling depth**: CL.CL, TE.CL, CL.TE variants, pause-based probes, connection reuse timing and safer differential heuristics.
+- **More raw smuggling depth**: chained request desync labs, longer-lived reuse experiments and richer timing baselines.
 - **Scope guardrails**: allowlist domains, redirect scope enforcement, denylist patterns and per-program traffic profiles.
 - **Richer response analysis**: login-page detection, WAF challenge signatures, JSON/HTML structural comparison and normalized body hashing.
 - **Async replay and verification**: faster confirmation while keeping per-host safety controls.

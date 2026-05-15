@@ -6,10 +6,12 @@ import pytest
 from bypass.engine import (
     AGGRESSIVE_PROFILE,
     ConnectOverride,
+    _apply_smuggling_heuristics,
     _apply_connect_override,
     _detect_stack_profile,
     _host_key,
     _raw_request_bytes,
+    _raw_followup_request,
     _raw_sni_for_spec,
     _spec_priority_tuple,
     _stack_family_priority,
@@ -137,6 +139,13 @@ def test_raw_request_bytes_preserves_duplicate_header_lines() -> None:
     assert raw.endswith(b"\r\n\r\n0\r\n\r\n")
 
 
+def test_raw_followup_request_uses_same_host() -> None:
+    raw = _raw_followup_request("example.com")
+    assert raw.startswith(b"GET / HTTP/1.1\r\n")
+    assert b"Host: example.com\r\n" in raw
+    assert raw.endswith(b"\r\n\r\n")
+
+
 def test_raw_sni_uses_host_payload_metadata() -> None:
     specs = _build_specs(
         "https://target.example/admin",
@@ -151,6 +160,35 @@ def test_raw_sni_uses_host_payload_metadata() -> None:
     )
     assert _raw_sni_for_spec(spec, "target.example") == "internal.example"
     assert _uses_raw_transport(spec) is True
+
+
+def test_smuggling_heuristic_requires_evidence() -> None:
+    spec = RequestSpec(method="POST", url="https://example.com/admin", headers={})
+    spec.smuggling_payload = next(p for _, _, p in engine.smuggling_lite_payloads())
+    result = TryResult(spec=spec, status_code=400, body_length=20, final_url=spec.url)
+    analysis = AnalysisResult(False, "none", [], score=0)
+    _apply_smuggling_heuristics(spec, result, analysis)
+    assert analysis.interesting is False
+
+
+def test_smuggling_heuristic_boosts_reuse_response() -> None:
+    spec = RequestSpec(method="POST", url="https://example.com/admin", headers={})
+    spec.smuggling_payload = next(
+        p for _, _, p in engine.smuggling_lite_payloads()
+        if p.metadata.get("reuse_connection")
+    )
+    result = TryResult(
+        spec=spec,
+        status_code=200,
+        body_length=20,
+        final_url=spec.url,
+        response_headers={"x-bypass-raw-reuse-response": "1"},
+    )
+    analysis = AnalysisResult(False, "none", [], score=0)
+    _apply_smuggling_heuristics(spec, result, analysis)
+    assert analysis.interesting is True
+    assert analysis.confidence == "medium"
+    assert "smuggling_reuse_response" in analysis.reasons
 
 
 def test_host_key_includes_default_port() -> None:

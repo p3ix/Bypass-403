@@ -6,6 +6,7 @@ import http.client
 import re
 import socket
 import ssl
+import time
 from collections import Counter
 from dataclasses import dataclass
 from statistics import pstdev
@@ -244,6 +245,30 @@ def _raw_request_bytes(spec: RequestSpec, default_host: str) -> bytes:
     return ("\r\n".join(head) + "\r\n\r\n").encode("iso-8859-1", errors="replace") + (spec.body or b"")
 
 
+def _raw_followup_request(default_host: str) -> bytes:
+    return (
+        "GET / HTTP/1.1\r\n"
+        f"Host: {default_host}\r\n"
+        "User-Agent: bypass-tool/raw-reuse\r\n"
+        "Connection: close\r\n\r\n"
+    ).encode("iso-8859-1", errors="replace")
+
+
+def _send_raw_probe(sock: socket.socket | ssl.SSLSocket, spec: RequestSpec, request_bytes: bytes) -> None:
+    metadata = spec.smuggling_payload.metadata if spec.smuggling_payload is not None else {}
+    pause_ms = int(metadata.get("pause_after_headers_ms", 0) or 0)
+    if pause_ms > 0:
+        marker = request_bytes.find(b"\r\n\r\n")
+        if marker >= 0:
+            split_at = marker + 4
+            sock.sendall(request_bytes[:split_at])
+            time.sleep(pause_ms / 1000)
+            if split_at < len(request_bytes):
+                sock.sendall(request_bytes[split_at:])
+            return
+    sock.sendall(request_bytes)
+
+
 def _parse_raw_response(data: bytes, final_url: str) -> tuple[int, int, str, str, dict[str, str], str | None]:
     if not data:
         return -1, 0, final_url, "", {}, "empty_response"
@@ -308,9 +333,13 @@ def _fetch_raw_spec(
     default_host = _netloc(original_host, original_port, u.scheme)
     request_bytes = _raw_request_bytes(spec, default_host)
     sni = _raw_sni_for_spec(spec, original_host)
+    metadata = spec.smuggling_payload.metadata if spec.smuggling_payload is not None else {}
+    reuse_connection = bool(metadata.get("reuse_connection"))
+    reuse_delay_ms = int(metadata.get("reuse_delay_ms", 0) or 0)
     try:
         if throttle is not None:
             throttle.before_request()
+        started_at = time.monotonic()
         raw_sock = socket.create_connection((connect_host, connect_port), timeout=timeout)
         raw_sock.settimeout(timeout)
         with raw_sock:
@@ -321,9 +350,20 @@ def _fetch_raw_spec(
                     ctx.check_hostname = False
                     ctx.verify_mode = ssl.CERT_NONE
                 active_sock = ctx.wrap_socket(raw_sock, server_hostname=sni or None)
-            active_sock.sendall(request_bytes)
+            _send_raw_probe(active_sock, spec, request_bytes)
+            if reuse_connection:
+                if reuse_delay_ms > 0:
+                    time.sleep(reuse_delay_ms / 1000)
+                active_sock.sendall(_raw_followup_request(default_host))
             data = _recv_raw_response(active_sock)
         parsed = _parse_raw_response(data, spec.url)
+        elapsed_ms = int((time.monotonic() - started_at) * 1000)
+        parsed[4]["x-bypass-raw-ms"] = str(elapsed_ms)
+        parsed[4]["x-bypass-raw-reuse"] = "1" if reuse_connection else "0"
+        if data.count(b"HTTP/") >= 2:
+            parsed[4]["x-bypass-raw-reuse-response"] = "1"
+        if metadata.get("timing_probe") or metadata.get("reuse_timing_probe"):
+            parsed[4]["x-bypass-raw-timing-probe"] = "1"
         if throttle is not None:
             throttle.after_response(parsed[0])
         return parsed
@@ -1112,6 +1152,7 @@ def _verify_findings(
                     )
                 ),
             )
+            _apply_smuggling_heuristics(original.spec, current, current_analysis)
             ok, reason = _verification_success(
                 original,
                 current,
@@ -1138,6 +1179,40 @@ def _verify_findings(
         else:
             if "verification_failed" not in analysis.reasons:
                 analysis.reasons.append("verification_failed")
+
+
+def _apply_smuggling_heuristics(spec: RequestSpec, result: TryResult, analysis: AnalysisResult) -> None:
+    if spec.smuggling_payload is None:
+        return
+    evidence: list[str] = []
+    metadata = spec.smuggling_payload.metadata
+    if analysis.interesting and "status_changed" in analysis.reasons:
+        evidence.append("smuggling_status_diff")
+    if result.response_headers.get("x-bypass-raw-reuse-response") == "1":
+        evidence.append("smuggling_reuse_response")
+    if result.response_headers.get("x-bypass-raw-timing-probe") == "1":
+        raw_ms = int(result.response_headers.get("x-bypass-raw-ms", "0") or "0")
+        pause_ms = int(metadata.get("pause_after_headers_ms", 0) or 0)
+        if raw_ms >= max(750, pause_ms + 250):
+            evidence.append("smuggling_timing_anomaly")
+    if result.status_code in {400, 411, 413, 426, 431, 500, 501, 502, 503, 504} and analysis.interesting:
+        evidence.append("smuggling_error_with_diff")
+    if not evidence:
+        return
+
+    for reason in evidence:
+        if reason not in analysis.reasons:
+            analysis.reasons.append(reason)
+    if any(r in evidence for r in {"smuggling_reuse_response", "smuggling_timing_anomaly"}):
+        analysis.score = max(analysis.score, 65)
+        analysis.interesting = True
+        if analysis.confidence in {"none", "low"}:
+            analysis.confidence = "medium"
+    elif "smuggling_status_diff" in evidence:
+        analysis.score = max(analysis.score, 50)
+        analysis.interesting = True
+        if analysis.confidence == "none":
+            analysis.confidence = "low"
 
 
 async def _run_specs_async(
@@ -1229,14 +1304,7 @@ async def _run_specs_async(
                                 )
                             ),
                         )
-                        if spec.smuggling_payload and tr.status_code in {
-                            400, 411, 413, 426, 431, 500, 501, 502, 503, 504,
-                        }:
-                            if "smuggling_suspected" not in ar.reasons:
-                                ar.reasons.append("smuggling_suspected")
-                            ar.score = max(ar.score, 55)
-                            ar.interesting = True
-                            ar.confidence = "medium" if ar.confidence == "none" else ar.confidence
+                        _apply_smuggling_heuristics(spec, tr, ar)
                         results.append((tr, ar))
                         done += 1
                         if progress_callback:

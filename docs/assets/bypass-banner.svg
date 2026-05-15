@@ -1,29 +1,38 @@
-<svg width="1280" height="360" viewBox="0 0 1280 360" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+<svg width="1280" height="420" viewBox="0 0 1280 420" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">Bypass Toolkit Banner</title>
-  <desc id="desc">Professional command line security toolkit banner for 401 and 403 bypass testing.</desc>
-  <rect width="1280" height="360" fill="#101820"/>
-  <path d="M0 276C138 236 238 240 365 261C516 286 596 315 761 284C930 252 1029 171 1280 200V360H0V276Z" fill="#1E3A3A"/>
-  <path d="M0 75C162 117 307 100 448 75C603 47 721 23 868 56C1014 88 1111 132 1280 91V0H0V75Z" fill="#17242F"/>
-  <rect x="76" y="66" width="1128" height="228" rx="22" fill="#14212B" stroke="#2F4C5C" stroke-width="2"/>
-  <rect x="102" y="94" width="456" height="172" rx="14" fill="#0B1117" stroke="#314A57"/>
-  <circle cx="130" cy="121" r="6" fill="#FF5F57"/>
-  <circle cx="152" cy="121" r="6" fill="#FFBD2E"/>
-  <circle cx="174" cy="121" r="6" fill="#28C840"/>
-  <text x="128" y="166" fill="#9EE6CF" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20">$ bypass https://target.tld/admin</text>
-  <text x="128" y="202" fill="#E7EEF2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18">403 -> 200  verified 3/3</text>
-  <text x="128" y="235" fill="#7FA6B3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16">raw SNI + Host + CL/TE differential probes</text>
-  <text x="606" y="148" fill="#F3F8FA" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="54" font-weight="800">Bypass</text>
-  <text x="606" y="190" fill="#9EE6CF" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="25" font-weight="600">403/401 bypass toolkit for Bug Bounty &amp; Pentesting</text>
-  <text x="606" y="228" fill="#B9C9D0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="19">Async scanning. Raw sockets. Verified findings. Reproducible output.</text>
-  <g transform="translate(1018 96)">
-    <rect width="150" height="88" rx="16" fill="#0B1117" stroke="#3C6470"/>
-    <text x="24" y="40" fill="#9EE6CF" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="28" font-weight="800">p3i</text>
-    <text x="24" y="64" fill="#B9C9D0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="14" font-weight="600">author</text>
+  <desc id="desc">Professional command line security toolkit banner for 401 and 403 bypass testing, authored by p3i.</desc>
+
+  <rect width="1280" height="420" fill="#0D1720"/>
+  <path d="M0 84C178 122 318 104 476 73C648 39 803 24 966 62C1090 91 1176 104 1280 75V0H0V84Z" fill="#142638"/>
+  <path d="M0 304C139 266 278 254 438 286C604 320 740 359 922 319C1074 286 1178 248 1280 264V420H0V304Z" fill="#173B37"/>
+  <path d="M76 66H1204C1222 66 1236 80 1236 98V322C1236 340 1222 354 1204 354H76C58 354 44 340 44 322V98C44 80 58 66 76 66Z" fill="#111F2B" stroke="#315467" stroke-width="2"/>
+
+  <g opacity="0.35">
+    <path d="M879 108H1170" stroke="#335B69"/>
+    <path d="M879 150H1126" stroke="#335B69"/>
+    <path d="M879 192H1160" stroke="#335B69"/>
+    <circle cx="1187" cy="108" r="4" fill="#86E8C7"/>
+    <circle cx="1143" cy="150" r="4" fill="#86E8C7"/>
+    <circle cx="1177" cy="192" r="4" fill="#86E8C7"/>
   </g>
-  <g fill="#9EE6CF" opacity="0.32">
-    <circle cx="1142" cy="238" r="4"/>
-    <circle cx="1110" cy="250" r="3"/>
-    <circle cx="1070" cy="230" r="3"/>
-    <circle cx="1182" cy="222" r="3"/>
+
+  <rect x="84" y="96" width="454" height="206" rx="16" fill="#071019" stroke="#315467"/>
+  <circle cx="113" cy="124" r="6" fill="#FF5F57"/>
+  <circle cx="136" cy="124" r="6" fill="#FFBD2E"/>
+  <circle cx="159" cy="124" r="6" fill="#28C840"/>
+  <text x="112" y="169" fill="#9CF6D7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="20" font-weight="700">$ bypass https://target.tld/admin</text>
+  <text x="112" y="206" fill="#F2F8FA" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18">403 -&gt; 200  verified 3/3</text>
+  <text x="112" y="241" fill="#7EA7B5" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16">raw SNI + Host + CL/TE timing</text>
+  <rect x="112" y="262" width="184" height="4" rx="2" fill="#86E8C7"/>
+
+  <text x="590" y="150" fill="#F7FBFC" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="64" font-weight="850">Bypass</text>
+  <text x="592" y="195" fill="#9CF6D7" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="25" font-weight="700">403/401 bypass toolkit for Bug Bounty &amp; Pentesting</text>
+  <text x="592" y="233" fill="#C3D5DC" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="19">Async scanning. Raw sockets. Verified findings. Reproducible output.</text>
+  <text x="592" y="274" fill="#86E8C7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" font-weight="700">author: p3i</text>
+
+  <g transform="translate(965 258)">
+    <rect width="200" height="44" rx="22" fill="#071019" stroke="#315467"/>
+    <circle cx="28" cy="22" r="6" fill="#86E8C7"/>
+    <text x="48" y="28" fill="#C3D5DC" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="15" font-weight="700">verified raw probes</text>
   </g>
 </svg>
