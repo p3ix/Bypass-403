@@ -1,15 +1,21 @@
+<div align="center">
+
+![Bypass — 403/401 bypass toolkit](docs/assets/bypass-banner.svg)
+
 # Bypass
 
-![Bypass toolkit banner](docs/assets/bypass-banner.svg)
+**Professional 403/401 bypass toolkit for authorized Bug Bounty, Red Team and Pentesting.**
 
-**Bypass** is a professional 403/401 bypass toolkit for authorized Bug Bounty, Red Team and Pentesting work. It automates high-yield access-control bypass techniques, ranks the most promising results, verifies findings against fresh baselines, and gives you reproducible evidence.
+Automates high-yield access-control bypass techniques, ranks the most promising results, verifies findings against fresh baselines, and exports reproducible evidence.
 
-Author: **p3i**
+**Author:** p3i
 
-[![Python](https://img.shields.io/badge/python-3.10%2B-2B6CB0)](https://www.python.org/)
-[![HTTP](https://img.shields.io/badge/httpx-async%20%2B%20raw%20sockets-1F8A70)](https://www.python-httpx.org/)
-[![Use](https://img.shields.io/badge/use-authorized%20testing-critical)](#responsible-use)
-[![Output](https://img.shields.io/badge/output-json%20%7C%20csv%20%7C%20curl-4B5563)](#output)
+[![Python](https://img.shields.io/badge/python-3.10%2B-2B6CB0?style=flat-square)](https://www.python.org/)
+[![HTTP](https://img.shields.io/badge/httpx-async%20%2B%20raw%20sockets-1F8A70?style=flat-square)](https://www.python-httpx.org/)
+[![Use](https://img.shields.io/badge/use-authorized%20testing-critical?style=flat-square)](#responsible-use)
+[![Output](https://img.shields.io/badge/output-json%20%7C%20csv%20%7C%20curl-4B5563?style=flat-square)](#output)
+
+</div>
 
 ## Highlights
 
