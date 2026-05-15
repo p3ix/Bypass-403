@@ -7,7 +7,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import typer
 from rich.console import Console
@@ -16,7 +16,7 @@ from rich.table import Table
 from rich.text import Text
 
 from bypass import __version__
-from bypass.engine import run_probe
+from bypass.engine import ConnectOverride, run_probe
 from bypass.models import AnalysisResult, TryResult
 from bypass.reporters.csv_reporter import export_csv
 from bypass.reporters.json_reporter import export_json
@@ -28,6 +28,114 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+def _parse_header_option(value: str) -> tuple[str, str]:
+    if ":" not in value:
+        raise typer.BadParameter("expected 'Name: value'")
+    name, header_value = value.split(":", 1)
+    name = name.strip()
+    if not name:
+        raise typer.BadParameter("header name cannot be empty")
+    return name, header_value.lstrip()
+
+
+def _merge_headers(header_values: list[str] | None) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    for item in header_values or []:
+        name, value = _parse_header_option(item)
+        headers[name] = value
+    return headers
+
+
+def _get_header(headers: dict[str, str], name: str) -> str | None:
+    for key, value in headers.items():
+        if key.lower() == name.lower():
+            return value
+    return None
+
+
+def _read_body_value(value: str | None) -> bytes | None:
+    if value is None:
+        return None
+    if value.startswith("@") and len(value) > 1:
+        return Path(value[1:]).read_bytes()
+    return value.encode("utf-8")
+
+
+def _parse_raw_request(path: str, fallback_url: str | None) -> tuple[str, str, dict[str, str], bytes | None]:
+    raw = Path(path).read_bytes()
+    marker = b"\r\n\r\n" if b"\r\n\r\n" in raw else b"\n\n"
+    head, _, body = raw.partition(marker)
+    lines = head.decode("iso-8859-1", errors="replace").splitlines()
+    if not lines:
+        raise typer.BadParameter("raw request file is empty")
+    parts = lines[0].split()
+    if len(parts) < 2:
+        raise typer.BadParameter("raw request line must look like 'GET /path HTTP/1.1'")
+    method = parts[0].upper()
+    request_target = parts[1]
+    headers: dict[str, str] = {}
+    for line in lines[1:]:
+        if not line.strip():
+            continue
+        name, value = _parse_header_option(line)
+        headers[name] = value
+
+    fallback = urlsplit(fallback_url or "")
+    host = _get_header(headers, "host") or fallback.netloc
+    if request_target.startswith(("http://", "https://")):
+        url = request_target
+    else:
+        if not host:
+            raise typer.BadParameter("raw request needs a Host header when no URL is provided")
+        scheme = fallback.scheme or "https"
+        base = urlunsplit((scheme, host, "/", "", ""))
+        url = urljoin(base, request_target)
+    return url, method, headers, body or None
+
+
+def _parse_resolve(value: str) -> ConnectOverride:
+    try:
+        host, port_text, ip = value.rsplit(":", 2)
+    except ValueError as exc:
+        raise typer.BadParameter("expected host:port:ip") from exc
+    if not host or not port_text or not ip:
+        raise typer.BadParameter("expected host:port:ip")
+    try:
+        port = int(port_text)
+    except ValueError as exc:
+        raise typer.BadParameter("port must be an integer") from exc
+    return ConnectOverride(host=host.strip("[]"), port=port, connect_host=ip.strip("[]"), connect_port=port)
+
+
+def _parse_connect_to(value: str) -> ConnectOverride:
+    parts = value.rsplit(":", 3)
+    if len(parts) == 3:
+        return _parse_resolve(value)
+    if len(parts) != 4:
+        raise typer.BadParameter("expected host:port:connect_host:connect_port")
+    host, port_text, connect_host, connect_port_text = parts
+    try:
+        port = int(port_text)
+        connect_port = int(connect_port_text)
+    except ValueError as exc:
+        raise typer.BadParameter("ports must be integers") from exc
+    return ConnectOverride(
+        host=host.strip("[]"),
+        port=port,
+        connect_host=connect_host.strip("[]"),
+        connect_port=connect_port,
+    )
+
+
+def _build_connect_overrides(
+    resolve_values: list[str] | None,
+    connect_to_values: list[str] | None,
+) -> list[ConnectOverride]:
+    out = [_parse_resolve(v) for v in resolve_values or []]
+    out.extend(_parse_connect_to(v) for v in connect_to_values or [])
+    return out
 
 
 def _status_bucket(status_code: int) -> str:
@@ -179,6 +287,17 @@ def _confidence_badge_style(conf: str) -> str:
     if conf == "low":
         return "cyan"
     return "dim"
+
+
+def _verification_text(a: AnalysisResult) -> Text:
+    t = Text()
+    if a.verified is True:
+        t.append(f"yes {a.verification_successes}/{a.verification_attempts}", style="bold green")
+    elif a.verified is False:
+        t.append(f"no {a.verification_successes}/{a.verification_attempts}", style="bold red")
+    else:
+        t.append("-", style="dim")
+    return t
 
 
 def _top_index_style(i: int) -> str:
@@ -349,6 +468,10 @@ def _rank_interesting_rows(
             bb_bonus += 30
         elif delta >= 120:
             bb_bonus += 15
+        if a.verified is True:
+            bb_bonus += 120
+        elif a.verified is False:
+            bb_bonus -= 40
         rank = a.score + _status_priority(baseline_status, r.status_code) + min(delta // 10, 60) + bb_bonus
         ranked.append((r, a, delta, rank))
     ranked.sort(key=lambda x: (x[3], x[1].score, x[2]), reverse=True)
@@ -388,6 +511,7 @@ def _print_top_bypasses(
     table.add_column("Delta", justify="right")
     table.add_column("Family", max_width=14)
     table.add_column("Payload", max_width=42, overflow="ellipsis")
+    table.add_column("Verified", justify="right")
     table.add_column("Conf/Score", justify="right")
     for idx, (r, a, delta, comp_rank) in enumerate(top):
         table.add_row(
@@ -398,6 +522,7 @@ def _print_top_bypasses(
             Text(str(delta), style=_delta_style(delta)),
             Text(r.spec.family or "general", style="cyan"),
             Text(_payload_label(r), style="white"),
+            _verification_text(a),
             _text_conf_score(a),
         )
     console.print(table)
@@ -405,15 +530,22 @@ def _print_top_bypasses(
     console.print("[bold green]Curl para reproducir:[/]")
     for idx, (r, a, delta, comp_rank) in enumerate(top):
         cmd = tryresult_to_curl(r, insecure=insecure, follow_redirects=follow_redirects, max_time=timeout)
-        smug = r.spec.smuggling_payload is not None
+        raw_transport = r.spec.smuggling_payload is not None or (
+            r.spec.host_payload is not None and r.spec.protocol_hint in {None, "http1_1"}
+        )
         line = Text()
         line.append(f"#{idx + 1} ", style=_top_index_style(idx))
         line.append(f"(rank {comp_rank}) ", style="dim")
         line.append(a.confidence, style=_confidence_badge_style(a.confidence))
         line.append(f" · Δ{delta} B", style="dim")
+        if a.verified is not None:
+            line.append(
+                f" · verified {a.verification_successes}/{a.verification_attempts}",
+                style="green" if a.verified else "red",
+            )
         console.print(line)
-        if smug:
-            console.print("  [dim]smuggling-lite probe; curl may differ from raw bytes sent[/]")
+        if raw_transport:
+            console.print("  [dim]raw socket probe; curl may differ from exact bytes/SNI used[/]")
         hd = _header_diff_text(r.spec.headers, baseline_request_headers, limit=4)
         console.print(f"  [dim]Headers:[/] {hd}")
         console.print(Text(f"  {cmd}", style="green"), soft_wrap=True)
@@ -436,17 +568,33 @@ def _app_callback(
 
 @app.command("probe", hidden=True)
 def probe(
-    url: Annotated[str, typer.Argument(help="Target URL (e.g. https://target.tld/admin)")],
+    url: Annotated[str | None, typer.Argument(help="Target URL (e.g. https://target.tld/admin)")] = None,
     insecure: Annotated[bool, typer.Option("-k", help="Skip TLS verification")] = False,
     follow: Annotated[bool, typer.Option("-L", help="Follow redirects")] = False,
     timeout: Annotated[float, typer.Option("--timeout", help="Request timeout (seconds)")] = 15.0,
     method: Annotated[list[str] | None, typer.Option("--method", help="HTTP method (repeatable)")] = None,
+    header: Annotated[list[str] | None, typer.Option("--header", "-H", help="Extra request header, e.g. 'Name: value'")] = None,
+    cookie: Annotated[str | None, typer.Option("--cookie", help="Cookie header value")] = None,
+    proxy: Annotated[str | None, typer.Option("--proxy", help="HTTP proxy, e.g. http://127.0.0.1:8080")] = None,
+    raw_request: Annotated[str | None, typer.Option("--raw-request", help="Load method/path/headers/body from raw HTTP request file")] = None,
+    resolve: Annotated[list[str] | None, typer.Option("--resolve", help="Connect host:port to IP, e.g. target.tld:443:1.2.3.4")] = None,
+    connect_to: Annotated[list[str] | None, typer.Option("--connect-to", help="Connect host:port to host:port")] = None,
+    user_agent: Annotated[str | None, typer.Option("--user-agent", help="User-Agent header value")] = None,
+    body_text: Annotated[str | None, typer.Option("--body", help="Request body text, or @file to read bytes")] = None,
+    content_type: Annotated[str | None, typer.Option("--content-type", help="Content-Type header value")] = None,
     bypass_ip: Annotated[list[str] | None, typer.Option("--bypass-ip", help="Extra IP for XFF payloads (repeatable)")] = None,
     host: Annotated[list[str] | None, typer.Option("--host", help="Extra host for Host/SNI fuzzing (repeatable)")] = None,
     output_json: Annotated[str | None, typer.Option("--json", help="Export results to JSON file")] = None,
     output_csv: Annotated[str | None, typer.Option("--csv", help="Export results to CSV file")] = None,
     all_results: Annotated[bool, typer.Option("--all", help="Show all results (not just interesting)")] = False,
     rate_limit: Annotated[float, typer.Option("--rate", help="Max requests per second (0 = unlimited)")] = 0.0,
+    concurrency: Annotated[int, typer.Option("--concurrency", help="Max concurrent requests")] = 20,
+    verify_hits: Annotated[
+        bool,
+        typer.Option("--verify/--no-verify", help="Re-test interesting findings against fresh baselines"),
+    ] = True,
+    verify_attempts: Annotated[int, typer.Option("--verify-attempts", help="Re-test attempts per finding")] = 3,
+    verify_limit: Annotated[int, typer.Option("--verify-limit", help="Max findings to verify")] = 20,
     top_limit: Annotated[int, typer.Option("--top", help="Max entries in Top bypasses table")] = 10,
     quiet: Annotated[bool, typer.Option("-q", "--quiet", help="Only show Top bypasses (skip full table)")] = False,
     live_hits: Annotated[
@@ -459,7 +607,27 @@ def probe(
 ) -> None:
     """Probe a URL for 403/401 bypass. Runs all techniques in aggressive mode."""
 
-    methods = method if method else ["GET"]
+    extra_headers: dict[str, str] = {}
+    raw_body: bytes | None = None
+    raw_method: str | None = None
+    target_url = url
+    if raw_request:
+        target_url, raw_method, raw_headers, raw_body = _parse_raw_request(raw_request, url)
+        extra_headers.update(raw_headers)
+    if target_url is None:
+        raise typer.BadParameter("URL is required unless --raw-request contains Host")
+    extra_headers.update(_merge_headers(header))
+    if cookie is not None:
+        extra_headers["Cookie"] = cookie
+    if user_agent is not None:
+        extra_headers["User-Agent"] = user_agent
+    if content_type is not None:
+        extra_headers["Content-Type"] = content_type
+    body_bytes = _read_body_value(body_text) if body_text is not None else raw_body
+    if body_bytes is not None and content_type is not None:
+        extra_headers.setdefault("Content-Type", content_type)
+    methods = method if method else [raw_method or ("POST" if body_bytes is not None else "GET")]
+    connect_overrides = _build_connect_overrides(resolve, connect_to)
     progress_stats = {"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0, "err": 0}
     progress_bar = Progress(
         TextColumn("[bold cyan]Scanning"),
@@ -500,17 +668,25 @@ def probe(
                     )
 
         base, results = run_probe(
-            url,
+            target_url,
             methods=methods,
             timeout=timeout,
             verify=not insecure,
             follow_redirects=follow,
+            extra_headers=extra_headers,
             bypass_ips=bypass_ip or None,
             host_fuzz_values=host or None,
             domain_mode=True,
             calibration_samples=5,
             progress_callback=on_progress,
             rate_limit=rate_limit,
+            concurrency=concurrency,
+            verify_findings=verify_hits,
+            verify_attempts=verify_attempts,
+            verify_limit=verify_limit,
+            body=body_bytes,
+            proxy=proxy,
+            connect_overrides=connect_overrides,
         )
 
     partial = bool(base.calibration.get("interrupted"))
@@ -532,7 +708,7 @@ def probe(
     visible_rows = [(r, a) for r, a in results if (a.interesting or not filter_interesting)]
 
     console.print(
-        f"\n[bold]Baseline[/] {url} → {base.status_code} [dim]({base.body_length} B)[/]"
+        f"\n[bold]Baseline[/] {target_url} → {base.status_code} [dim]({base.body_length} B)[/]"
     )
     if base.calibration.get("enabled"):
         console.print(
@@ -543,12 +719,20 @@ def probe(
         )
     stack_profile = str(base.calibration.get("stack_profile", "generic"))
     console.print(f"[dim]Stack profile: {stack_profile}[/]")
+    verification_meta = base.calibration.get("verification")
+    if isinstance(verification_meta, dict) and verification_meta.get("enabled"):
+        verified_count = sum(1 for _, a in results if a.verified is True)
+        checked_count = sum(1 for _, a in results if a.verified is not None)
+        console.print(
+            f"[dim]Verification: checked={checked_count} verified={verified_count} "
+            f"attempts={verification_meta.get('attempts')} limit={verification_meta.get('limit')}[/]"
+        )
 
     _print_top_bypasses(
         base.status_code, base.body_length, results,
         top_limit=top_limit, top_min_score=35,
         insecure=insecure, follow_redirects=follow, timeout=timeout,
-        baseline_request_headers={},
+        baseline_request_headers=extra_headers,
         baseline_response_headers=base.response_headers,
     )
     _print_status_summary(results)
@@ -566,6 +750,7 @@ def probe(
             table.add_column("Code", justify="right")
             table.add_column("Bytes", justify="right")
             table.add_column("Payload", max_width=44)
+            table.add_column("Verified", justify="right")
             table.add_column("URL", max_width=56)
             for r, analysis in visible_rows:
                 payload_label = _payload_label(r)
@@ -576,13 +761,14 @@ def probe(
                 table.add_row(
                     r.spec.method, code, str(r.body_length),
                     f"{payload_label} [{analysis.confidence}:{analysis.score}]",
+                    str(_verification_text(analysis).plain),
                     r.final_url,
                 )
             console.print(table)
 
     export_rows = results if partial else visible_rows
     if output_json:
-        export_json(output_json, url, base, export_rows)
+        export_json(output_json, target_url, base, export_rows)
         console.print(f"[green]JSON →[/] {output_json}" + (" [dim](partial scan)[/]" if partial else ""))
     if output_csv:
         export_csv(output_csv, export_rows)
@@ -607,17 +793,38 @@ def batch(
     follow: Annotated[bool, typer.Option("-L", help="Follow redirects")] = False,
     timeout: Annotated[float, typer.Option("--timeout")] = 15.0,
     method: Annotated[list[str] | None, typer.Option("--method")] = None,
+    header: Annotated[list[str] | None, typer.Option("--header", "-H")] = None,
+    cookie: Annotated[str | None, typer.Option("--cookie")] = None,
+    proxy: Annotated[str | None, typer.Option("--proxy")] = None,
+    resolve: Annotated[list[str] | None, typer.Option("--resolve")] = None,
+    connect_to: Annotated[list[str] | None, typer.Option("--connect-to")] = None,
+    user_agent: Annotated[str | None, typer.Option("--user-agent")] = None,
+    body_text: Annotated[str | None, typer.Option("--body")] = None,
+    content_type: Annotated[str | None, typer.Option("--content-type")] = None,
     bypass_ip: Annotated[list[str] | None, typer.Option("--bypass-ip")] = None,
     host: Annotated[list[str] | None, typer.Option("--host")] = None,
     all_results: Annotated[bool, typer.Option("--all")] = False,
     out_dir: Annotated[str, typer.Option("--out-dir", help="Output directory")] = "out",
     rate_limit: Annotated[float, typer.Option("--rate")] = 0.0,
+    concurrency: Annotated[int, typer.Option("--concurrency")] = 20,
+    verify_hits: Annotated[bool, typer.Option("--verify/--no-verify")] = True,
+    verify_attempts: Annotated[int, typer.Option("--verify-attempts")] = 3,
+    verify_limit: Annotated[int, typer.Option("--verify-limit")] = 20,
 ) -> None:
     """Run bypass scan against a list of URLs from a file."""
     urls = [line.strip() for line in Path(input_file).read_text(encoding="utf-8").splitlines() if line.strip()]
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     summary: list[dict[str, object]] = []
-    methods = method if method else ["GET"]
+    extra_headers = _merge_headers(header)
+    if cookie is not None:
+        extra_headers["Cookie"] = cookie
+    if user_agent is not None:
+        extra_headers["User-Agent"] = user_agent
+    if content_type is not None:
+        extra_headers["Content-Type"] = content_type
+    body_bytes = _read_body_value(body_text)
+    methods = method if method else ["POST" if body_bytes is not None else "GET"]
+    connect_overrides = _build_connect_overrides(resolve, connect_to)
 
     with Progress(
         TextColumn("[bold magenta]Batch"),
@@ -635,10 +842,18 @@ def batch(
                 timeout=timeout,
                 verify=not insecure,
                 follow_redirects=follow,
+                extra_headers=extra_headers,
                 bypass_ips=bypass_ip or None,
                 host_fuzz_values=host or None,
                 domain_mode=True,
                 rate_limit=rate_limit,
+                concurrency=concurrency,
+                verify_findings=verify_hits,
+                verify_attempts=verify_attempts,
+                verify_limit=verify_limit,
+                body=body_bytes,
+                proxy=proxy,
+                connect_overrides=connect_overrides,
             )
             visible_rows = [(r, a) for r, a in rows if (a.interesting or all_results)]
             stem = f"target_{idx:03d}"
@@ -669,6 +884,7 @@ def replay(
     insecure: Annotated[bool, typer.Option("-k")] = False,
     follow: Annotated[bool, typer.Option("-L")] = False,
     timeout: Annotated[float, typer.Option("--timeout")] = 15.0,
+    proxy: Annotated[str | None, typer.Option("--proxy")] = None,
     min_confidence: Annotated[str, typer.Option("--min-confidence", help="Minimum confidence: low, medium, high")] = "medium",
     max_targets: Annotated[int, typer.Option("--max-targets")] = 50,
     rate_limit: Annotated[float, typer.Option("--rate")] = 0.0,
@@ -716,7 +932,7 @@ def replay(
         for hdrs, hp in default_header_sets(path, host_val, scheme)[:6]:
             attempt_rows.append((base_method, base_url, {**dict(base_headers), **hdrs}, f"header:{hp.id}"))
 
-    with make_client(timeout, not insecure, False) as client:
+    with make_client(timeout, not insecure, False, proxy=proxy) as client:
         table = Table(title="Replay", show_lines=False)
         table.add_column("Method")
         table.add_column("Code")
@@ -786,7 +1002,7 @@ def main() -> None:
     """Console entry: permite `bypass <URL>` sin subcomando `probe`."""
     subcommands = {"batch", "replay", "list", "--help", "-h", "--version", "-V"}
     args = sys.argv[1:]
-    if args and args[0] not in subcommands and not args[0].startswith("-"):
+    if args and args[0] not in subcommands and (not args[0].startswith("-") or "--raw-request" in args):
         sys.argv = [sys.argv[0], "probe"] + args
     app()
 

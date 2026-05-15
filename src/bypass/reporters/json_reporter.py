@@ -57,6 +57,10 @@ def export_json(
                     "confidence": a.confidence,
                     "score": a.score,
                     "reasons": a.reasons,
+                    "verified": a.verified,
+                    "verification_attempts": a.verification_attempts,
+                    "verification_successes": a.verification_successes,
+                    "verification_reasons": a.verification_reasons,
                 },
             }
             for r, a in rows

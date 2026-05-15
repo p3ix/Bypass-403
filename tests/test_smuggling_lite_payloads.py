@@ -7,3 +7,7 @@ def test_smuggling_lite_includes_cl_te_conflicts() -> None:
     headers = [h for h, _, _ in rows]
     assert any("cl_te" in i for i in ids)
     assert any("Content-Length" in h and "Transfer-Encoding" in h for h in headers)
+    assert any(
+        len(p.metadata.get("raw_headers", [])) != len(dict(p.metadata.get("raw_headers", [])))
+        for _, _, p in rows
+    )

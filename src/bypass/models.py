@@ -46,6 +46,7 @@ class RequestSpec:
     host_payload: Payload | None = None
     smuggling_payload: Payload | None = None
     protocol_hint: str | None = None
+    raw_header_lines: list[tuple[str, str]] | None = None
     body: bytes | None = None
     family: str | None = None
     target_type: str = "path"
@@ -83,3 +84,7 @@ class AnalysisResult:
     confidence: str
     reasons: list[str]
     score: int = 0
+    verified: bool | None = None
+    verification_attempts: int = 0
+    verification_successes: int = 0
+    verification_reasons: list[str] = field(default_factory=list)

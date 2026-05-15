@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import http.client
 import re
+import socket
 import ssl
 from collections import Counter
 from dataclasses import dataclass
@@ -13,7 +15,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 import httpx
 
 from bypass.analyzers.response_diff import AnalyzerConfig, analyze_result
-from bypass.http_client import make_client
+from bypass.http_client import make_async_client, make_client
 from bypass.models import AnalysisResult, BaselineSnapshot, Payload, RequestSpec, TryResult
 from bypass.payloads.auth_401 import auth_challenge_payloads
 from bypass.payloads.domain_403 import domain_header_payloads
@@ -24,7 +26,7 @@ from bypass.payloads.paths_403 import all_path_variants
 from bypass.payloads.protocols_403 import protocol_payloads
 from bypass.payloads.query_403 import query_mutations
 from bypass.payloads.smuggling_lite import smuggling_lite_payloads
-from bypass.safety import RequestThrottle
+from bypass.safety import AsyncHostThrottle, RequestThrottle
 
 DEFAULT_BYPASS_IPS = ["127.0.0.1", "::1", "10.0.0.1", "192.168.0.1", "0.0.0.0"]
 COMBINE_LIMIT = 5000
@@ -39,6 +41,20 @@ class RuntimeProfile:
 
 
 AGGRESSIVE_PROFILE = RuntimeProfile(name="aggressive", combine_limit=COMBINE_LIMIT, length_delta=LENGTH_DELTA)
+
+
+@dataclass(frozen=True)
+class ConnectOverride:
+    host: str
+    port: int
+    connect_host: str
+    connect_port: int
+
+
+class PartialScanInterrupted(Exception):
+    def __init__(self, results: list[tuple[TryResult, AnalysisResult]]) -> None:
+        super().__init__("scan_interrupted")
+        self.results = results
 
 
 def _extract_title(body_sample: str) -> str:
@@ -107,6 +123,244 @@ def _baseline_body_for_method(method: str) -> bytes | None:
     return b"{}" if method.upper() in {"POST", "PUT", "PATCH"} else None
 
 
+def _default_port(scheme: str) -> int:
+    return 443 if scheme.lower() == "https" else 80
+
+
+def _netloc(host: str, port: int, scheme: str) -> str:
+    if ":" in host and not host.startswith("["):
+        host_part = f"[{host}]"
+    else:
+        host_part = host
+    return host_part if port == _default_port(scheme) else f"{host_part}:{port}"
+
+
+def _has_header(headers: dict[str, str], name: str) -> bool:
+    return any(k.lower() == name.lower() for k in headers)
+
+
+def _header_value(headers: dict[str, str], name: str) -> str | None:
+    for key, value in headers.items():
+        if key.lower() == name.lower():
+            return value
+    return None
+
+
+def _host_without_port(value: str) -> str:
+    host = (value or "").strip()
+    if not host:
+        return ""
+    if host.startswith("[") and "]" in host:
+        return host[1:host.index("]")]
+    if ":" in host and host.count(":") == 1:
+        return host.rsplit(":", 1)[0]
+    return host.rstrip(".")
+
+
+def _apply_connect_override(
+    url: str,
+    headers: dict[str, str],
+    connect_overrides: list[ConnectOverride] | None,
+) -> tuple[str, dict[str, str]]:
+    if not connect_overrides:
+        return url, headers
+    u = urlsplit(url)
+    host = u.hostname
+    if not host:
+        return url, headers
+    port = u.port or _default_port(u.scheme)
+    for override in connect_overrides:
+        if override.host.lower() != host.lower() or override.port != port:
+            continue
+        hdrs = dict(headers)
+        original_host = _netloc(host, port, u.scheme)
+        if not _has_header(hdrs, "host") and not _has_header(hdrs, ":authority"):
+            hdrs["Host"] = original_host
+        new_url = urlunsplit((
+            u.scheme,
+            _netloc(override.connect_host, override.connect_port, u.scheme),
+            u.path,
+            u.query,
+            u.fragment,
+        ))
+        return new_url, hdrs
+    return url, headers
+
+
+def _connect_target(
+    url: str,
+    connect_overrides: list[ConnectOverride] | None,
+) -> tuple[str, int, str, int]:
+    u = urlsplit(url)
+    host = u.hostname or ""
+    port = u.port or _default_port(u.scheme)
+    for override in connect_overrides or []:
+        if override.host.lower() == host.lower() and override.port == port:
+            return host, port, override.connect_host, override.connect_port
+    return host, port, host, port
+
+
+def _raw_header_lines_for_spec(spec: RequestSpec, default_host: str) -> list[tuple[str, str]]:
+    source = spec.raw_header_lines or list(spec.headers.items())
+    lines: list[tuple[str, str]] = []
+    has_host = False
+    authority_value = ""
+    for key, value in source:
+        if key.lower() == ":authority":
+            authority_value = value
+            continue
+        if key.lower() == "host":
+            has_host = True
+        lines.append((key, value))
+    if not has_host:
+        lines.insert(0, ("Host", authority_value or default_host))
+    if not any(k.lower() == "user-agent" for k, _ in lines):
+        lines.append(("User-Agent", "bypass-tool/raw"))
+    if not any(k.lower() == "connection" for k, _ in lines):
+        lines.append(("Connection", "close"))
+    if spec.body and not any(k.lower() == "content-length" for k, _ in lines):
+        lines.append(("Content-Length", str(len(spec.body))))
+    return lines
+
+
+def _raw_sni_for_spec(spec: RequestSpec, original_host: str) -> str:
+    host_header = _header_value(spec.headers, "host") or _header_value(spec.headers, ":authority")
+    meta_host = ""
+    if spec.host_payload is not None:
+        meta = spec.host_payload.metadata.get("host")
+        if isinstance(meta, str):
+            meta_host = meta
+    return _host_without_port(host_header or meta_host or original_host)
+
+
+def _raw_request_bytes(spec: RequestSpec, default_host: str) -> bytes:
+    u = urlsplit(spec.url)
+    path_q = u.path or "/"
+    if u.query:
+        path_q = f"{path_q}?{u.query}"
+    head = [f"{spec.method} {path_q} HTTP/1.1"]
+    for key, value in _raw_header_lines_for_spec(spec, default_host):
+        head.append(f"{key}: {value}")
+    return ("\r\n".join(head) + "\r\n\r\n").encode("iso-8859-1", errors="replace") + (spec.body or b"")
+
+
+def _parse_raw_response(data: bytes, final_url: str) -> tuple[int, int, str, str, dict[str, str], str | None]:
+    if not data:
+        return -1, 0, final_url, "", {}, "empty_response"
+    head, _, body = data.partition(b"\r\n\r\n")
+    lines = head.decode("iso-8859-1", errors="replace").splitlines()
+    if not lines:
+        return -1, 0, final_url, "", {}, "invalid_response"
+    status_parts = lines[0].split()
+    try:
+        status = int(status_parts[1])
+    except (IndexError, ValueError):
+        return -1, 0, final_url, "", {}, "invalid_status_line"
+    headers: dict[str, str] = {}
+    for line in lines[1:]:
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        low = key.strip().lower()
+        if low in {"www-authenticate", "location", "server", "content-type"}:
+            headers[low] = value.strip()
+    body_sample = body[:400].decode("utf-8", errors="replace")
+    return status, len(body), final_url, body_sample, headers, None
+
+
+def _recv_raw_response(sock: socket.socket, *, max_bytes: int = 1024 * 1024) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    while total < max_bytes:
+        try:
+            chunk = sock.recv(min(65536, max_bytes - total))
+        except socket.timeout:
+            break
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+        data = b"".join(chunks)
+        head, marker, body = data.partition(b"\r\n\r\n")
+        if marker:
+            m = re.search(rb"(?im)^content-length:\s*(\d+)\s*$", head)
+            if m and len(body) >= int(m.group(1)):
+                break
+            if re.search(rb"(?im)^connection:\s*close\s*$", head):
+                continue
+    return b"".join(chunks)
+
+
+def _fetch_raw_spec(
+    spec: RequestSpec,
+    *,
+    timeout: float,
+    verify_tls: bool,
+    throttle: RequestThrottle | None = None,
+    connect_overrides: list[ConnectOverride] | None = None,
+) -> tuple[int, int, str, str, dict[str, str], str | None]:
+    u = urlsplit(spec.url)
+    if not u.scheme or not u.hostname:
+        return -1, 0, spec.url, "", {}, "invalid_url"
+    original_host, original_port, connect_host, connect_port = _connect_target(
+        spec.url, connect_overrides
+    )
+    default_host = _netloc(original_host, original_port, u.scheme)
+    request_bytes = _raw_request_bytes(spec, default_host)
+    sni = _raw_sni_for_spec(spec, original_host)
+    try:
+        if throttle is not None:
+            throttle.before_request()
+        raw_sock = socket.create_connection((connect_host, connect_port), timeout=timeout)
+        raw_sock.settimeout(timeout)
+        with raw_sock:
+            active_sock: socket.socket | ssl.SSLSocket = raw_sock
+            if u.scheme == "https":
+                ctx = ssl.create_default_context()
+                if not verify_tls:
+                    ctx.check_hostname = False
+                    ctx.verify_mode = ssl.CERT_NONE
+                active_sock = ctx.wrap_socket(raw_sock, server_hostname=sni or None)
+            active_sock.sendall(request_bytes)
+            data = _recv_raw_response(active_sock)
+        parsed = _parse_raw_response(data, spec.url)
+        if throttle is not None:
+            throttle.after_response(parsed[0])
+        return parsed
+    except Exception as e:
+        return -1, 0, spec.url, "", {}, f"raw_socket:{e}"
+
+
+async def _fetch_raw_spec_async(
+    spec: RequestSpec,
+    *,
+    timeout: float,
+    verify_tls: bool,
+    throttle: AsyncHostThrottle | None = None,
+    connect_overrides: list[ConnectOverride] | None = None,
+) -> tuple[int, int, str, str, dict[str, str], str | None]:
+    host_key = _host_key(spec.url)
+    if throttle is not None:
+        await throttle.before_request(host_key)
+    result = await asyncio.to_thread(
+        _fetch_raw_spec,
+        spec,
+        timeout=timeout,
+        verify_tls=verify_tls,
+        throttle=None,
+        connect_overrides=connect_overrides,
+    )
+    if throttle is not None:
+        await throttle.after_response(host_key, result[0])
+    return result
+
+
+def _uses_raw_transport(spec: RequestSpec) -> bool:
+    return spec.smuggling_payload is not None or (
+        spec.host_payload is not None and spec.protocol_hint in {None, "http1_1"}
+    )
+
+
 def compute_dynamic_length_delta(lengths: list[int], floor: int) -> int:
     if not lengths:
         return floor
@@ -140,24 +394,29 @@ def _calibrate_target(
     verify: bool = True,
     follow_redirects: bool = False,
     throttle: RequestThrottle | None = None,
+    proxy: str | None = None,
+    connect_overrides: list[ConnectOverride] | None = None,
 ) -> dict[str, object]:
     statuses: list[int] = []
     lengths: list[int] = []
     for url in _calibration_urls(target_url, samples):
         if protocol_hint == "http2":
-            with make_client(timeout, verify, False, http2=True) as pclient:
+            with make_client(timeout, verify, False, http2=True, proxy=proxy) as pclient:
                 st, ln, _, _, _, err = _fetch(
                     pclient, method, url, headers, body,
                     follow_redirects=follow_redirects, throttle=throttle,
+                    connect_overrides=connect_overrides,
                 )
         elif protocol_hint == "http1_0":
             st, ln, _, _, _, err = _fetch_http10(
                 method, url, headers, timeout=timeout, verify=verify, body=body, throttle=throttle,
+                connect_overrides=connect_overrides,
             )
         else:
             st, ln, _, _, _, err = _fetch(
                 client, method, url, headers, body,
                 follow_redirects=follow_redirects, throttle=throttle,
+                connect_overrides=connect_overrides,
             )
         if err:
             continue
@@ -185,6 +444,7 @@ def _fetch(
     follow_redirects: bool = False,
     throttle: RequestThrottle | None = None,
     max_redirects: int = 5,
+    connect_overrides: list[ConnectOverride] | None = None,
 ) -> tuple[int, int, str, str, dict[str, str], str | None]:
     h = dict(headers or {})
     try:
@@ -195,10 +455,73 @@ def _fetch(
         for redirect_hop in range(max_hops + 1):
             if throttle is not None:
                 throttle.before_request()
-            request = client.build_request(active_method, active_url, headers=h, content=active_body)
+            request_url, request_headers = _apply_connect_override(active_url, h, connect_overrides)
+            request = client.build_request(
+                active_method, request_url, headers=request_headers, content=active_body
+            )
             r = client.send(request, follow_redirects=False)
             if throttle is not None:
                 throttle.after_response(r.status_code)
+            if not follow_redirects or not r.is_redirect:
+                break
+            if redirect_hop >= max_hops:
+                return -1, 0, active_url, "", {}, "too_many_redirects"
+            location = r.headers.get("location")
+            if not location:
+                break
+            next_url = str(urljoin(str(r.url), location))
+            if r.status_code in {301, 302, 303} and active_method.upper() not in {"GET", "HEAD"}:
+                active_method = "GET"
+                active_body = None
+            active_url = next_url
+        content = r.content or b""
+        body_sample = content[:400].decode("utf-8", errors="replace")
+        resp_headers = {
+            "www-authenticate": r.headers.get("www-authenticate", ""),
+            "location": r.headers.get("location", ""),
+            "server": r.headers.get("server", ""),
+            "content-type": r.headers.get("content-type", ""),
+        }
+        return r.status_code, len(content), str(r.url), body_sample, resp_headers, None
+    except Exception as e:
+        return -1, 0, url, "", {}, str(e)
+
+
+def _host_key(url: str) -> str:
+    u = urlsplit(url)
+    host = u.hostname or ""
+    port = u.port or _default_port(u.scheme or "https")
+    return f"{host.lower()}:{port}" if host else "default"
+
+
+async def _fetch_async(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    headers: dict[str, str] | None,
+    body: bytes | None = None,
+    follow_redirects: bool = False,
+    throttle: AsyncHostThrottle | None = None,
+    max_redirects: int = 5,
+    connect_overrides: list[ConnectOverride] | None = None,
+) -> tuple[int, int, str, str, dict[str, str], str | None]:
+    h = dict(headers or {})
+    try:
+        active_url = url
+        active_method = method
+        active_body = body
+        max_hops = max_redirects if follow_redirects else 0
+        for redirect_hop in range(max_hops + 1):
+            host_key = _host_key(active_url)
+            if throttle is not None:
+                await throttle.before_request(host_key)
+            request_url, request_headers = _apply_connect_override(active_url, h, connect_overrides)
+            request = client.build_request(
+                active_method, request_url, headers=request_headers, content=active_body
+            )
+            r = await client.send(request, follow_redirects=False)
+            if throttle is not None:
+                await throttle.after_response(host_key, r.status_code)
             if not follow_redirects or not r.is_redirect:
                 break
             if redirect_hop >= max_hops:
@@ -233,16 +556,18 @@ def _fetch_http10(
     verify: bool,
     body: bytes | None = None,
     throttle: RequestThrottle | None = None,
+    connect_overrides: list[ConnectOverride] | None = None,
 ) -> tuple[int, int, str, str, dict[str, str], str | None]:
     try:
-        u = urlsplit(url)
+        hdrs = dict(headers or {})
+        request_url, hdrs = _apply_connect_override(url, hdrs, connect_overrides)
+        u = urlsplit(request_url)
         if not u.scheme or not u.netloc:
             return -1, 0, url, "", {}, "invalid_url"
         path_q = u.path or "/"
         if u.query:
             path_q = f"{path_q}?{u.query}"
-        hdrs = dict(headers or {})
-        if "Host" not in hdrs and u.netloc:
+        if not _has_header(hdrs, "host") and u.netloc:
             hdrs["Host"] = u.netloc
         if throttle is not None:
             throttle.before_request()
@@ -272,6 +597,36 @@ def _fetch_http10(
         return int(resp.status), len(raw), url, sample, resp_headers, None
     except Exception as e:
         return -1, 0, url, "", {}, str(e)
+
+
+async def _fetch_http10_async(
+    method: str,
+    url: str,
+    headers: dict[str, str] | None,
+    *,
+    timeout: float,
+    verify: bool,
+    body: bytes | None = None,
+    throttle: AsyncHostThrottle | None = None,
+    connect_overrides: list[ConnectOverride] | None = None,
+) -> tuple[int, int, str, str, dict[str, str], str | None]:
+    host_key = _host_key(url)
+    if throttle is not None:
+        await throttle.before_request(host_key)
+    result = await asyncio.to_thread(
+        _fetch_http10,
+        method,
+        url,
+        headers,
+        timeout=timeout,
+        verify=verify,
+        body=body,
+        throttle=None,
+        connect_overrides=connect_overrides,
+    )
+    if throttle is not None:
+        await throttle.after_response(host_key, result[0])
+    return result
 
 
 def _build_specs(
@@ -373,9 +728,11 @@ def _build_specs(
 
         # Smuggling
         for hdrs, body, sp in smuggle_sets[: max(1, smuggling_limit)]:
+            raw_header_lines = sp.metadata.get("raw_headers")
             specs.append(RequestSpec(
                 method="POST", url=target_url, headers=hdrs,
                 body=body, smuggling_payload=sp, family="smuggling",
+                raw_header_lines=raw_header_lines if isinstance(raw_header_lines, list) else None,
                 target_type="domain" if domain_mode else "path",
             ))
 
@@ -494,11 +851,13 @@ def _stack_family_priority(stack_profile: str) -> dict[str, int]:
 
 def _spec_fingerprint(spec: RequestSpec) -> tuple[object, ...]:
     header_items = tuple(sorted((k.lower(), v) for k, v in spec.headers.items()))
+    raw_header_items = tuple((k.lower(), v) for k, v in spec.raw_header_lines or [])
     body_digest = hashlib.sha256(spec.body or b"").hexdigest() if spec.body is not None else ""
     return (
         spec.method.upper(),
         spec.url,
         header_items,
+        raw_header_items,
         spec.protocol_hint or "",
         body_digest,
         spec.target_type,
@@ -530,13 +889,17 @@ def _fetch_baseline_snapshot(
     calibration_samples: int,
     protocol_hint: str | None,
     throttle: RequestThrottle,
+    proxy: str | None,
+    connect_overrides: list[ConnectOverride] | None,
+    body_override: bytes | None = None,
 ) -> BaselineSnapshot:
-    body = _baseline_body_for_method(method)
+    body = body_override if body_override is not None else _baseline_body_for_method(method)
     if protocol_hint == "http2":
-        with make_client(timeout, verify, False, http2=True) as pclient:
+        with make_client(timeout, verify, False, http2=True, proxy=proxy) as pclient:
             st, ln, _, baseline_sample, baseline_resp_headers, err = _fetch(
                 pclient, method, target_url, headers, body,
                 follow_redirects=follow_redirects, throttle=throttle,
+                connect_overrides=connect_overrides,
             )
             calibration = _calibrate_target(
                 pclient, target_url, headers,
@@ -544,10 +907,12 @@ def _fetch_baseline_snapshot(
                 method=method, body=body, protocol_hint=protocol_hint,
                 timeout=timeout, verify=verify,
                 follow_redirects=follow_redirects, throttle=throttle,
+                proxy=proxy, connect_overrides=connect_overrides,
             )
     elif protocol_hint == "http1_0":
         st, ln, _, baseline_sample, baseline_resp_headers, err = _fetch_http10(
             method, target_url, headers, timeout=timeout, verify=verify, body=body, throttle=throttle,
+            connect_overrides=connect_overrides,
         )
         calibration = _calibrate_target(
             client, target_url, headers,
@@ -555,11 +920,13 @@ def _fetch_baseline_snapshot(
             method=method, body=body, protocol_hint=protocol_hint,
             timeout=timeout, verify=verify,
             follow_redirects=follow_redirects, throttle=throttle,
+            proxy=proxy, connect_overrides=connect_overrides,
         )
     else:
         st, ln, _, baseline_sample, baseline_resp_headers, err = _fetch(
             client, method, target_url, headers, body,
             follow_redirects=follow_redirects, throttle=throttle,
+            connect_overrides=connect_overrides,
         )
         calibration = _calibrate_target(
             client, target_url, headers,
@@ -567,6 +934,7 @@ def _fetch_baseline_snapshot(
             method=method, body=body, protocol_hint=protocol_hint,
             timeout=timeout, verify=verify,
             follow_redirects=follow_redirects, throttle=throttle,
+            proxy=proxy, connect_overrides=connect_overrides,
         )
     if err:
         st, ln = -1, 0
@@ -579,6 +947,315 @@ def _fetch_baseline_snapshot(
         body_title=_extract_title(baseline_sample),
         content_type=baseline_resp_headers.get("content-type", ""),
     )
+
+
+def _spec_priority_tuple(spec: RequestSpec, family_priority: dict[str, int]) -> tuple[int, str, str]:
+    return (
+        family_priority.get(_spec_family_name(spec), 50),
+        spec.method,
+        spec.url,
+    )
+
+
+def _verification_length_tolerance(original_len: int, baseline: BaselineSnapshot, profile: RuntimeProfile) -> int:
+    calibrated = int(baseline.calibration.get("length_delta", profile.length_delta))
+    dynamic = max(120, int(max(original_len, 1) * 0.10))
+    return max(calibrated, dynamic)
+
+
+def _same_status_bucket(left: int, right: int) -> bool:
+    if left < 0 or right < 0:
+        return left == right
+    return left // 100 == right // 100
+
+
+def _verification_success(
+    original: TryResult,
+    current: TryResult,
+    fresh_baseline: BaselineSnapshot,
+    current_analysis: AnalysisResult,
+    *,
+    profile: RuntimeProfile,
+) -> tuple[bool, str]:
+    if current.error:
+        return False, "verification_request_error"
+    if not current_analysis.interesting:
+        return False, "verification_not_interesting"
+    if current.status_code == fresh_baseline.status_code:
+        return False, "verification_matches_fresh_baseline"
+    if not _same_status_bucket(original.status_code, current.status_code):
+        return False, "verification_status_bucket_changed"
+    tolerance = _verification_length_tolerance(original.body_length, fresh_baseline, profile)
+    if abs(original.body_length - current.body_length) > tolerance:
+        return False, "verification_length_drift"
+    return True, "verification_reproduced"
+
+
+def _verify_fetch(
+    client: httpx.Client,
+    spec: RequestSpec,
+    *,
+    timeout: float,
+    verify_tls: bool,
+    follow_redirects: bool,
+    throttle: RequestThrottle,
+    proxy: str | None,
+    connect_overrides: list[ConnectOverride] | None,
+) -> tuple[int, int, str, str, dict[str, str], str | None]:
+    if _uses_raw_transport(spec):
+        return _fetch_raw_spec(
+            spec,
+            timeout=timeout,
+            verify_tls=verify_tls,
+            throttle=throttle,
+            connect_overrides=connect_overrides,
+        )
+    if spec.protocol_hint == "http2":
+        with make_client(timeout, verify_tls, False, http2=True, proxy=proxy) as pclient:
+            return _fetch(
+                pclient, spec.method, spec.url, spec.headers, spec.body,
+                follow_redirects=follow_redirects, throttle=throttle,
+                connect_overrides=connect_overrides,
+            )
+    if spec.protocol_hint == "http1_0":
+        return _fetch_http10(
+            spec.method, spec.url, spec.headers,
+            timeout=timeout, verify=verify_tls, body=spec.body, throttle=throttle,
+            connect_overrides=connect_overrides,
+        )
+    return _fetch(
+        client, spec.method, spec.url, spec.headers, spec.body,
+        follow_redirects=follow_redirects, throttle=throttle,
+        connect_overrides=connect_overrides,
+    )
+
+
+def _verification_candidates(
+    rows: list[tuple[TryResult, AnalysisResult]],
+    limit: int,
+) -> list[tuple[TryResult, AnalysisResult]]:
+    candidates = [(r, a) for r, a in rows if a.interesting and not r.error]
+    candidates.sort(key=lambda item: (item[1].score, item[0].body_length), reverse=True)
+    return candidates[: max(0, limit)]
+
+
+def _verify_findings(
+    client: httpx.Client,
+    target_url: str,
+    rows: list[tuple[TryResult, AnalysisResult]],
+    *,
+    base_headers: dict[str, str],
+    timeout: float,
+    verify_tls: bool,
+    follow_redirects: bool,
+    profile: RuntimeProfile,
+    calibration_samples: int,
+    rate_limit: float,
+    attempts: int,
+    limit: int,
+    proxy: str | None,
+    connect_overrides: list[ConnectOverride] | None,
+) -> None:
+    if attempts <= 0 or limit <= 0:
+        return
+    throttle = RequestThrottle(
+        rate_per_second=max(rate_limit, 0.0),
+        jitter_ms=0,
+        backoff_ms=1000,
+    )
+    for original, analysis in _verification_candidates(rows, limit):
+        successes = 0
+        seen_reasons: list[str] = []
+        active_attempts = max(1, attempts)
+        for _ in range(active_attempts):
+            fresh_baseline = _fetch_baseline_snapshot(
+                client,
+                target_url=target_url,
+                headers=base_headers,
+                method=original.spec.method,
+                timeout=timeout,
+                verify=verify_tls,
+                follow_redirects=follow_redirects,
+                profile=profile,
+                calibration_samples=max(1, calibration_samples),
+                protocol_hint=original.spec.protocol_hint,
+                throttle=throttle,
+                proxy=proxy,
+                connect_overrides=connect_overrides,
+                body_override=original.spec.body,
+            )
+            st, ln, final, body_sample, resp_headers, err = _verify_fetch(
+                client,
+                original.spec,
+                timeout=timeout,
+                verify_tls=verify_tls,
+                follow_redirects=follow_redirects,
+                throttle=throttle,
+                proxy=proxy,
+                connect_overrides=connect_overrides,
+            )
+            current = TryResult(
+                spec=original.spec,
+                status_code=st,
+                body_length=ln,
+                final_url=final,
+                error=err,
+                response_headers=resp_headers,
+            )
+            current_analysis = analyze_result(
+                fresh_baseline,
+                current,
+                body_sample=body_sample,
+                config=AnalyzerConfig(
+                    length_delta=int(
+                        fresh_baseline.calibration.get("length_delta", profile.length_delta)
+                    )
+                ),
+            )
+            ok, reason = _verification_success(
+                original,
+                current,
+                fresh_baseline,
+                current_analysis,
+                profile=profile,
+            )
+            if ok:
+                successes += 1
+            if reason not in seen_reasons:
+                seen_reasons.append(reason)
+
+        threshold = (active_attempts // 2) + 1
+        analysis.verification_attempts = active_attempts
+        analysis.verification_successes = successes
+        analysis.verified = successes >= threshold
+        analysis.verification_reasons = seen_reasons
+        if analysis.verified:
+            if "verified_reproducible" not in analysis.reasons:
+                analysis.reasons.append("verified_reproducible")
+            analysis.score += 10
+            if analysis.confidence == "low":
+                analysis.confidence = "medium"
+        else:
+            if "verification_failed" not in analysis.reasons:
+                analysis.reasons.append("verification_failed")
+
+
+async def _run_specs_async(
+    specs: list[RequestSpec],
+    transport_baseline_cache: dict[tuple[str, str], BaselineSnapshot],
+    *,
+    family_priority: dict[str, int],
+    timeout: float,
+    verify: bool,
+    follow_redirects: bool,
+    profile: RuntimeProfile,
+    progress_callback: Callable[[int, int, TryResult, AnalysisResult], None] | None,
+    rate_limit: float,
+    concurrency: int,
+    proxy: str | None,
+    connect_overrides: list[ConnectOverride] | None,
+) -> list[tuple[TryResult, AnalysisResult]]:
+    total = len(specs)
+    results: list[tuple[TryResult, AnalysisResult]] = []
+    queue: asyncio.PriorityQueue[
+        tuple[tuple[int, str, str], int, RequestSpec | None, BaselineSnapshot | None]
+    ] = asyncio.PriorityQueue()
+    for seq, spec in enumerate(specs):
+        baseline = transport_baseline_cache[_baseline_transport_key(spec.method, spec.protocol_hint)]
+        queue.put_nowait((_spec_priority_tuple(spec, family_priority), seq, spec, baseline))
+
+    worker_count = max(1, min(concurrency, total or 1))
+    for seq in range(worker_count):
+        queue.put_nowait(((999, "", ""), total + seq, None, None))
+
+    throttle = AsyncHostThrottle(
+        rate_per_second=max(rate_limit, 0.0),
+        jitter_ms=0,
+        backoff_ms=1000,
+    )
+    done = 0
+
+    try:
+        async with (
+            make_async_client(timeout, verify, False, proxy=proxy) as client,
+            make_async_client(timeout, verify, False, http2=True, proxy=proxy) as http2_client,
+        ):
+
+            async def worker() -> None:
+                nonlocal done
+                while True:
+                    _, _, spec, active_baseline = await queue.get()
+                    try:
+                        if spec is None or active_baseline is None:
+                            return
+                        if _uses_raw_transport(spec):
+                            st2, ln2, final, body_sample, resp_headers, err2 = await _fetch_raw_spec_async(
+                                spec,
+                                timeout=timeout,
+                                verify_tls=verify,
+                                throttle=throttle,
+                                connect_overrides=connect_overrides,
+                            )
+                        elif spec.protocol_hint == "http2":
+                            st2, ln2, final, body_sample, resp_headers, err2 = await _fetch_async(
+                                http2_client, spec.method, spec.url, spec.headers, spec.body,
+                                follow_redirects=follow_redirects, throttle=throttle,
+                                connect_overrides=connect_overrides,
+                            )
+                        elif spec.protocol_hint == "http1_0":
+                            st2, ln2, final, body_sample, resp_headers, err2 = await _fetch_http10_async(
+                                spec.method, spec.url, spec.headers,
+                                timeout=timeout, verify=verify, body=spec.body, throttle=throttle,
+                                connect_overrides=connect_overrides,
+                            )
+                        else:
+                            st2, ln2, final, body_sample, resp_headers, err2 = await _fetch_async(
+                                client, spec.method, spec.url, spec.headers, spec.body,
+                                follow_redirects=follow_redirects, throttle=throttle,
+                                connect_overrides=connect_overrides,
+                            )
+
+                        tr = TryResult(
+                            spec=spec, status_code=st2, body_length=ln2,
+                            final_url=final, error=err2, response_headers=resp_headers,
+                        )
+                        ar = analyze_result(
+                            active_baseline, tr, body_sample=body_sample,
+                            config=AnalyzerConfig(
+                                length_delta=int(
+                                    active_baseline.calibration.get(
+                                        "length_delta", profile.length_delta
+                                    )
+                                )
+                            ),
+                        )
+                        if spec.smuggling_payload and tr.status_code in {
+                            400, 411, 413, 426, 431, 500, 501, 502, 503, 504,
+                        }:
+                            if "smuggling_suspected" not in ar.reasons:
+                                ar.reasons.append("smuggling_suspected")
+                            ar.score = max(ar.score, 55)
+                            ar.interesting = True
+                            ar.confidence = "medium" if ar.confidence == "none" else ar.confidence
+                        results.append((tr, ar))
+                        done += 1
+                        if progress_callback:
+                            progress_callback(done, total, tr, ar)
+                    finally:
+                        queue.task_done()
+
+            tasks = [asyncio.create_task(worker()) for _ in range(worker_count)]
+            try:
+                await queue.join()
+            finally:
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+    except asyncio.CancelledError as exc:
+        raise PartialScanInterrupted(results) from exc
+
+    return results
 
 
 def run_probe(
@@ -597,6 +1274,13 @@ def run_probe(
     calibration_samples: int = 5,
     progress_callback: Callable[[int, int, TryResult, AnalysisResult], None] | None = None,
     rate_limit: float = 0.0,
+    body: bytes | None = None,
+    proxy: str | None = None,
+    connect_overrides: list[ConnectOverride] | None = None,
+    concurrency: int = 20,
+    verify_findings: bool = True,
+    verify_attempts: int = 3,
+    verify_limit: int = 20,
 ) -> tuple[BaselineSnapshot, list[tuple[TryResult, AnalysisResult]]]:
     profile = AGGRESSIVE_PROFILE
     methods = [x.upper() for x in (methods or ["GET"])]
@@ -608,12 +1292,12 @@ def run_probe(
         backoff_ms=1000,
     )
 
-    with make_client(timeout, verify, False) as client:
+    with make_client(timeout, verify, False, proxy=proxy) as client:
         baseline = _fetch_baseline_snapshot(
             client,
             target_url=target_url,
             headers=base_hdrs,
-            method="GET",
+            method=methods[0] if body is not None and methods else "GET",
             timeout=timeout,
             verify=verify,
             follow_redirects=follow_redirects,
@@ -621,6 +1305,9 @@ def run_probe(
             calibration_samples=calibration_samples,
             protocol_hint=None,
             throttle=throttle,
+            proxy=proxy,
+            connect_overrides=connect_overrides,
+            body_override=body,
         )
         stack_profile = _detect_stack_profile(
             server_header=baseline.response_headers.get("server", ""),
@@ -639,86 +1326,99 @@ def run_probe(
         )
         family_priority = _stack_family_priority(stack_profile)
         specs.sort(
-            key=lambda s: (
-                family_priority.get(_spec_family_name(s), 50),
-                s.method,
-                s.url,
-            )
+            key=lambda s: _spec_priority_tuple(s, family_priority)
         )
         for s in specs:
             s.headers = {**base_hdrs, **s.headers}
+            if body is not None and s.body is None:
+                s.body = body
+        baseline_method = methods[0] if body is not None and methods else "GET"
         baseline_cache: dict[BaselineKey, BaselineSnapshot] = {
-            ("GET", "http1_1", "general"): baseline,
+            (baseline_method.upper(), "http1_1", "general"): baseline,
         }
         transport_baseline_cache: dict[tuple[str, str], BaselineSnapshot] = {
-            _baseline_transport_key("GET", None): baseline,
+            _baseline_transport_key(baseline_method, None): baseline,
         }
 
-        results: list[tuple[TryResult, AnalysisResult]] = []
         total = len(specs)
         try:
-            for idx, s in enumerate(specs, start=1):
+            for s in specs:
                 baseline_key = _baseline_key_for_spec(s)
-                active_baseline = baseline_cache.get(baseline_key)
+                if baseline_key in baseline_cache:
+                    continue
+                transport_key = _baseline_transport_key(s.method, s.protocol_hint)
+                active_baseline = transport_baseline_cache.get(transport_key)
                 if active_baseline is None:
-                    transport_key = _baseline_transport_key(s.method, s.protocol_hint)
-                    active_baseline = transport_baseline_cache.get(transport_key)
-                    if active_baseline is None:
-                        active_baseline = _fetch_baseline_snapshot(
-                            client,
-                            target_url=target_url,
-                            headers=base_hdrs,
-                            method=s.method,
-                            timeout=timeout,
-                            verify=verify,
-                            follow_redirects=follow_redirects,
-                            profile=profile,
-                            calibration_samples=calibration_samples,
-                            protocol_hint=s.protocol_hint,
-                            throttle=throttle,
-                        )
-                        transport_baseline_cache[transport_key] = active_baseline
-                    baseline_cache[baseline_key] = active_baseline
-
-                if s.protocol_hint == "http2":
-                    with make_client(timeout, verify, False, http2=True) as pclient:
-                        st2, ln2, final, body_sample, resp_headers, err2 = _fetch(
-                            pclient, s.method, s.url, s.headers, s.body,
-                            follow_redirects=follow_redirects, throttle=throttle,
-                        )
-                elif s.protocol_hint == "http1_0":
-                    st2, ln2, final, body_sample, resp_headers, err2 = _fetch_http10(
-                        s.method, s.url, s.headers,
-                        timeout=timeout, verify=verify, body=s.body, throttle=throttle,
+                    active_baseline = _fetch_baseline_snapshot(
+                        client,
+                        target_url=target_url,
+                        headers=base_hdrs,
+                        method=s.method,
+                        timeout=timeout,
+                        verify=verify,
+                        follow_redirects=follow_redirects,
+                        profile=profile,
+                        calibration_samples=calibration_samples,
+                        protocol_hint=s.protocol_hint,
+                        throttle=throttle,
+                        proxy=proxy,
+                        connect_overrides=connect_overrides,
+                        body_override=body,
                     )
-                else:
-                    st2, ln2, final, body_sample, resp_headers, err2 = _fetch(
-                        client, s.method, s.url, s.headers, s.body,
-                        follow_redirects=follow_redirects, throttle=throttle,
-                    )
+                    transport_baseline_cache[transport_key] = active_baseline
+                baseline_cache[baseline_key] = active_baseline
 
-                tr = TryResult(
-                    spec=s, status_code=st2, body_length=ln2,
-                    final_url=final, error=err2, response_headers=resp_headers,
+            baseline.calibration["concurrency"] = max(1, int(concurrency))
+            baseline.calibration["queue"] = "async-priority"
+            results = asyncio.run(
+                _run_specs_async(
+                    specs,
+                    transport_baseline_cache,
+                    family_priority=family_priority,
+                    timeout=timeout,
+                    verify=verify,
+                    follow_redirects=follow_redirects,
+                    profile=profile,
+                    progress_callback=progress_callback,
+                    rate_limit=rate_limit,
+                    concurrency=max(1, int(concurrency)),
+                    proxy=proxy,
+                    connect_overrides=connect_overrides,
                 )
-                ar = analyze_result(
-                    active_baseline, tr, body_sample=body_sample,
-                    config=AnalyzerConfig(
-                        length_delta=int(active_baseline.calibration.get("length_delta", profile.length_delta))
-                    ),
+            )
+            if verify_findings:
+                baseline.calibration["verification"] = {
+                    "enabled": True,
+                    "attempts": max(1, int(verify_attempts)),
+                    "limit": max(0, int(verify_limit)),
+                }
+                _verify_findings(
+                    client,
+                    target_url,
+                    results,
+                    base_headers=base_hdrs,
+                    timeout=timeout,
+                    verify_tls=verify,
+                    follow_redirects=follow_redirects,
+                    profile=profile,
+                    calibration_samples=calibration_samples,
+                    rate_limit=rate_limit,
+                    attempts=max(1, int(verify_attempts)),
+                    limit=max(0, int(verify_limit)),
+                    proxy=proxy,
+                    connect_overrides=connect_overrides,
                 )
-                if s.smuggling_payload and tr.status_code in {400, 411, 413, 426, 431, 500, 501, 502, 503, 504}:
-                    if "smuggling_suspected" not in ar.reasons:
-                        ar.reasons.append("smuggling_suspected")
-                    ar.score = max(ar.score, 55)
-                    ar.interesting = True
-                    ar.confidence = "medium" if ar.confidence == "none" else ar.confidence
-                results.append((tr, ar))
-                if progress_callback:
-                    progress_callback(idx, total, tr, ar)
+            else:
+                baseline.calibration["verification"] = {"enabled": False}
+        except PartialScanInterrupted as exc:
+            baseline.calibration["interrupted"] = True
+            results = exc.results
+            baseline.calibration["partial_results"] = len(results)
+            baseline.calibration["planned_total"] = total
         except KeyboardInterrupt:
             baseline.calibration["interrupted"] = True
-            baseline.calibration["partial_results"] = len(results)
+            results = []
+            baseline.calibration["partial_results"] = 0
             baseline.calibration["planned_total"] = total
 
     return baseline, results

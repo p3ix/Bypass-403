@@ -33,6 +33,10 @@ def export_csv(output_path: str, rows: list[tuple[TryResult, AnalysisResult]]) -
                 "confidence",
                 "score",
                 "reasons",
+                "verified",
+                "verification_attempts",
+                "verification_successes",
+                "verification_reasons",
             ]
         )
         for r, a in rows:
@@ -58,5 +62,9 @@ def export_csv(output_path: str, rows: list[tuple[TryResult, AnalysisResult]]) -
                     a.confidence,
                     a.score,
                     "|".join(a.reasons),
+                    "" if a.verified is None else a.verified,
+                    a.verification_attempts,
+                    a.verification_successes,
+                    "|".join(a.verification_reasons),
                 ]
             )

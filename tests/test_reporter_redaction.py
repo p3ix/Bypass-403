@@ -25,7 +25,16 @@ def _sample_row() -> tuple[TryResult, AnalysisResult]:
             "set-cookie": "session=abcd",
         },
     )
-    analysis = AnalysisResult(True, "high", ["status_changed"], score=80)
+    analysis = AnalysisResult(
+        True,
+        "high",
+        ["status_changed"],
+        score=80,
+        verified=True,
+        verification_attempts=3,
+        verification_successes=3,
+        verification_reasons=["verification_reproduced"],
+    )
     return result, analysis
 
 
@@ -48,6 +57,8 @@ def test_export_json_redacts_sensitive_fields(tmp_path: Path) -> None:
     assert "redacted" in data["results"][0]["url"]
     assert "redacted" in data["results"][0]["final_url"]
     assert "redacted" in data["results"][0]["error"]
+    assert data["results"][0]["analysis"]["verified"] is True
+    assert data["results"][0]["analysis"]["verification_successes"] == 3
 
 
 def test_export_csv_redacts_sensitive_url_and_error(tmp_path: Path) -> None:
@@ -58,3 +69,4 @@ def test_export_csv_redacts_sensitive_url_and_error(tmp_path: Path) -> None:
     assert "abc123" not in content
     assert "hunter2" not in content
     assert "<redacted>" in content
+    assert "verification_reproduced" in content
