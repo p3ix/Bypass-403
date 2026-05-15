@@ -13,8 +13,14 @@ def export_json(
     baseline: BaselineSnapshot,
     rows: list[tuple[TryResult, AnalysisResult]],
 ) -> None:
+    partial = bool(baseline.calibration.get("interrupted"))
     data = {
         "target_url": sanitize_url(target_url),
+        "scan": {
+            "partial": partial,
+            "completed_requests": len(rows),
+            "planned_total": baseline.calibration.get("planned_total"),
+        },
         "baseline": {
             "status_code": baseline.status_code,
             "body_length": baseline.body_length,

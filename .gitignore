@@ -20,3 +20,4 @@ htmlcov/
 .vscode/
 *.swp
 .DS_Store
+results.json

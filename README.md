@@ -11,6 +11,20 @@ python3 -m venv .venv
 pip install -e .
 ```
 
+## Si ves `No such command 'https://...'`
+
+Eso pasa cuando el ejecutable `bypass` del venv **no se ha regenerado** tras un `git pull`: sigue apuntando a la entrada antigua (`app()` sin el shim) y Typer interpreta la URL como nombre de subcomando.
+
+Solución (en el repo, con el venv activo):
+
+```bash
+pip install -e .
+hash -r   # opcional, en zsh/bash
+which bypass
+```
+
+Comprueba que el primer argumento sea la URL o usa explícito: `bypass probe https://...`
+
 ## Usage
 
 ```bash
@@ -31,6 +45,12 @@ bypass https://target.tld/admin --rate 10
 
 # Quiet mode (only Top bypasses table + curl)
 bypass https://target.tld/admin -k -q
+
+# Live 2xx/3xx lines during scan (default on; disable with --no-live-hits). Disabled when -q.
+bypass https://target.tld/admin -k --live-hits
+
+# Ctrl+C: partial JSON/CSV is written if you passed --json/--csv (all rows collected so far)
+bypass https://target.tld/admin -k --json partial.json
 
 # Follow redirects
 bypass https://target.tld/admin -k -L
@@ -71,6 +91,8 @@ Default bypass IPs injected: `127.0.0.1`, `::1`, `10.0.0.1`, `192.168.0.1`, `0.0
 | `--all` | Show all results (not just interesting) |
 | `--rate N` | Max requests/second (0 = unlimited) |
 | `--top N` | Max entries in Top bypasses table (default: 10) |
+| `--live-hits` / `--no-live-hits` | Print each 2xx/3xx as it arrives (default: on; off with `-q`) |
+| `--json` / `--csv` | On Ctrl+C, writes **partial** file with all requests completed so far (`scan.partial` in JSON) |
 
 ## Batch mode
 

@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-bypass = "bypass.__main__:main"
+bypass = "bypass.cli:main"
 
 [project.optional-dependencies]
 dev = [

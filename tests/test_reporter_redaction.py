@@ -41,6 +41,8 @@ def test_export_json_redacts_sensitive_fields(tmp_path: Path) -> None:
     data = json.loads(fp.read_text(encoding="utf-8"))
 
     assert "redacted" in data["target_url"]
+    assert data["scan"]["partial"] is False
+    assert data["scan"]["completed_requests"] == 1
     assert data["baseline"]["response_headers"]["set-cookie"] == "<redacted>"
     assert data["results"][0]["headers"]["Authorization"] == "<redacted>"
     assert "redacted" in data["results"][0]["url"]

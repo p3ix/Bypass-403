@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import shlex
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Annotated
@@ -448,6 +449,13 @@ def probe(
     rate_limit: Annotated[float, typer.Option("--rate", help="Max requests per second (0 = unlimited)")] = 0.0,
     top_limit: Annotated[int, typer.Option("--top", help="Max entries in Top bypasses table")] = 10,
     quiet: Annotated[bool, typer.Option("-q", "--quiet", help="Only show Top bypasses (skip full table)")] = False,
+    live_hits: Annotated[
+        bool,
+        typer.Option(
+            "--live-hits/--no-live-hits",
+            help="Print each 2xx/3xx response as it arrives (useful with long scans)",
+        ),
+    ] = True,
 ) -> None:
     """Probe a URL for 403/401 bypass. Runs all techniques in aggressive mode."""
 
@@ -477,6 +485,19 @@ def probe(
                 t4xx=progress_stats["4xx"], t5xx=progress_stats["5xx"],
                 terr=progress_stats["err"],
             )
+            if live_hits and not quiet and tr.error is None:
+                sc = tr.status_code
+                if 200 <= sc < 300:
+                    curl_one = tryresult_to_curl(tr, insecure=insecure, follow_redirects=follow, max_time=timeout)
+                    progress_bar.console.print(
+                        f"[bold green]2xx hit[/] {sc} · {tr.body_length} B · {_payload_label(tr)[:72]}\n"
+                        f"[dim]{curl_one}[/]",
+                    )
+                elif 300 <= sc < 400:
+                    loc = (tr.response_headers.get("location") or "")[:80]
+                    progress_bar.console.print(
+                        f"[bold cyan]3xx hit[/] {sc} · {tr.body_length} B · loc={loc or '-'} · {_payload_label(tr)[:56]}",
+                    )
 
         base, results = run_probe(
             url,
@@ -490,6 +511,15 @@ def probe(
             calibration_samples=5,
             progress_callback=on_progress,
             rate_limit=rate_limit,
+        )
+
+    partial = bool(base.calibration.get("interrupted"))
+    if partial:
+        done_n = int(base.calibration.get("partial_results", len(results)))
+        planned = base.calibration.get("planned_total")
+        console.print(
+            f"[yellow]Scan interrupted (Ctrl+C). Partial results: {done_n}"
+            f"{f' / {planned}' if planned is not None else ''} requests completed.[/]"
         )
 
     filter_interesting = not all_results
@@ -550,17 +580,24 @@ def probe(
                 )
             console.print(table)
 
+    export_rows = results if partial else visible_rows
     if output_json:
-        export_json(output_json, url, base, visible_rows)
-        console.print(f"[green]JSON →[/] {output_json}")
+        export_json(output_json, url, base, export_rows)
+        console.print(f"[green]JSON →[/] {output_json}" + (" [dim](partial scan)[/]" if partial else ""))
     if output_csv:
-        export_csv(output_csv, visible_rows)
-        console.print(f"[green]CSV →[/] {output_csv}")
+        export_csv(output_csv, export_rows)
+        console.print(f"[green]CSV →[/] {output_csv}" + (" [dim](partial scan)[/]" if partial else ""))
 
     console.print(
         f"[dim]Requests: {len(results)} · Shown: {len(visible_rows)} · "
         f"Interesting: {sum(1 for _, a in results if a.interesting)}[/]"
     )
+    if partial:
+        if not output_json and not output_csv:
+            console.print(
+                "[yellow]Tip: use --json out.json (or --csv) to keep partial results on Ctrl+C.[/]"
+            )
+        raise typer.Exit(130)
 
 
 @app.command("batch")
@@ -745,5 +782,14 @@ def list_payloads() -> None:
     )
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Console entry: permite `bypass <URL>` sin subcomando `probe`."""
+    subcommands = {"batch", "replay", "list", "--help", "-h", "--version", "-V"}
+    args = sys.argv[1:]
+    if args and args[0] not in subcommands and not args[0].startswith("-"):
+        sys.argv = [sys.argv[0], "probe"] + args
     app()
+
+
+if __name__ == "__main__":
+    main()

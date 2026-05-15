@@ -656,64 +656,69 @@ def run_probe(
 
         results: list[tuple[TryResult, AnalysisResult]] = []
         total = len(specs)
-        for idx, s in enumerate(specs, start=1):
-            baseline_key = _baseline_key_for_spec(s)
-            active_baseline = baseline_cache.get(baseline_key)
-            if active_baseline is None:
-                transport_key = _baseline_transport_key(s.method, s.protocol_hint)
-                active_baseline = transport_baseline_cache.get(transport_key)
+        try:
+            for idx, s in enumerate(specs, start=1):
+                baseline_key = _baseline_key_for_spec(s)
+                active_baseline = baseline_cache.get(baseline_key)
                 if active_baseline is None:
-                    active_baseline = _fetch_baseline_snapshot(
-                        client,
-                        target_url=target_url,
-                        headers=base_hdrs,
-                        method=s.method,
-                        timeout=timeout,
-                        verify=verify,
-                        follow_redirects=follow_redirects,
-                        profile=profile,
-                        calibration_samples=calibration_samples,
-                        protocol_hint=s.protocol_hint,
-                        throttle=throttle,
-                    )
-                    transport_baseline_cache[transport_key] = active_baseline
-                baseline_cache[baseline_key] = active_baseline
+                    transport_key = _baseline_transport_key(s.method, s.protocol_hint)
+                    active_baseline = transport_baseline_cache.get(transport_key)
+                    if active_baseline is None:
+                        active_baseline = _fetch_baseline_snapshot(
+                            client,
+                            target_url=target_url,
+                            headers=base_hdrs,
+                            method=s.method,
+                            timeout=timeout,
+                            verify=verify,
+                            follow_redirects=follow_redirects,
+                            profile=profile,
+                            calibration_samples=calibration_samples,
+                            protocol_hint=s.protocol_hint,
+                            throttle=throttle,
+                        )
+                        transport_baseline_cache[transport_key] = active_baseline
+                    baseline_cache[baseline_key] = active_baseline
 
-            if s.protocol_hint == "http2":
-                with make_client(timeout, verify, False, http2=True) as pclient:
+                if s.protocol_hint == "http2":
+                    with make_client(timeout, verify, False, http2=True) as pclient:
+                        st2, ln2, final, body_sample, resp_headers, err2 = _fetch(
+                            pclient, s.method, s.url, s.headers, s.body,
+                            follow_redirects=follow_redirects, throttle=throttle,
+                        )
+                elif s.protocol_hint == "http1_0":
+                    st2, ln2, final, body_sample, resp_headers, err2 = _fetch_http10(
+                        s.method, s.url, s.headers,
+                        timeout=timeout, verify=verify, body=s.body, throttle=throttle,
+                    )
+                else:
                     st2, ln2, final, body_sample, resp_headers, err2 = _fetch(
-                        pclient, s.method, s.url, s.headers, s.body,
+                        client, s.method, s.url, s.headers, s.body,
                         follow_redirects=follow_redirects, throttle=throttle,
                     )
-            elif s.protocol_hint == "http1_0":
-                st2, ln2, final, body_sample, resp_headers, err2 = _fetch_http10(
-                    s.method, s.url, s.headers,
-                    timeout=timeout, verify=verify, body=s.body, throttle=throttle,
-                )
-            else:
-                st2, ln2, final, body_sample, resp_headers, err2 = _fetch(
-                    client, s.method, s.url, s.headers, s.body,
-                    follow_redirects=follow_redirects, throttle=throttle,
-                )
 
-            tr = TryResult(
-                spec=s, status_code=st2, body_length=ln2,
-                final_url=final, error=err2, response_headers=resp_headers,
-            )
-            ar = analyze_result(
-                active_baseline, tr, body_sample=body_sample,
-                config=AnalyzerConfig(
-                    length_delta=int(active_baseline.calibration.get("length_delta", profile.length_delta))
-                ),
-            )
-            if s.smuggling_payload and tr.status_code in {400, 411, 413, 426, 431, 500, 501, 502, 503, 504}:
-                if "smuggling_suspected" not in ar.reasons:
-                    ar.reasons.append("smuggling_suspected")
-                ar.score = max(ar.score, 55)
-                ar.interesting = True
-                ar.confidence = "medium" if ar.confidence == "none" else ar.confidence
-            results.append((tr, ar))
-            if progress_callback:
-                progress_callback(idx, total, tr, ar)
+                tr = TryResult(
+                    spec=s, status_code=st2, body_length=ln2,
+                    final_url=final, error=err2, response_headers=resp_headers,
+                )
+                ar = analyze_result(
+                    active_baseline, tr, body_sample=body_sample,
+                    config=AnalyzerConfig(
+                        length_delta=int(active_baseline.calibration.get("length_delta", profile.length_delta))
+                    ),
+                )
+                if s.smuggling_payload and tr.status_code in {400, 411, 413, 426, 431, 500, 501, 502, 503, 504}:
+                    if "smuggling_suspected" not in ar.reasons:
+                        ar.reasons.append("smuggling_suspected")
+                    ar.score = max(ar.score, 55)
+                    ar.interesting = True
+                    ar.confidence = "medium" if ar.confidence == "none" else ar.confidence
+                results.append((tr, ar))
+                if progress_callback:
+                    progress_callback(idx, total, tr, ar)
+        except KeyboardInterrupt:
+            baseline.calibration["interrupted"] = True
+            baseline.calibration["partial_results"] = len(results)
+            baseline.calibration["planned_total"] = total
 
     return baseline, results
